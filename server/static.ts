@@ -27,6 +27,7 @@ export async function staticFile(request: Request, pathname: string) {
   return new Response(request.method === "HEAD" ? null : file, {
     headers: {
       "Content-Type": file.type,
+      "Content-Length": String(file.size),
       "Cache-Control": decoded.startsWith("/assets/")
         ? "public, max-age=31536000, immutable"
         : "no-cache",
