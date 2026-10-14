@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.2.0...v0.3.0)
+
+### 🚀 Enhancements
+
+- **app:** Add layer previews, Better Auth, and compiled Zod validation ([221caf2](https://github.com/Ripwords/BambuDeck/commit/221caf2))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.2.0
 
 [Compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.1.0...v0.2.0)
