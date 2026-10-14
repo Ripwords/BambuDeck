@@ -27,10 +27,7 @@ export function remotePath(value: unknown, allowRoot = true): string {
     throw new FileError(400, "Invalid printer file path.");
   const path = posix.normalize("/" + value.replace(/^\/+/, ""));
   if (!allowRoot && path === "/")
-    throw new FileError(
-      400,
-      "Select a file or folder; the storage root cannot be modified.",
-    );
+    throw new FileError(400, "Select a file or folder; the storage root cannot be modified.");
   return path;
 }
 export async function ftp(credentials: Credentials): Promise<Client> {
@@ -83,11 +80,7 @@ export async function listFiles(credentials: Credentials, path: string) {
 function attachment(name: string) {
   return `attachment; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
-export async function download(
-  credentials: Credentials,
-  path: string,
-  signal: AbortSignal,
-) {
+export async function download(credentials: Credentials, path: string, signal: AbortSignal) {
   path = remotePath(path, false);
   const client = await ftp(credentials);
   const output = new PassThrough();
@@ -123,12 +116,8 @@ export async function modify(
 ) {
   await withFTP(credentials, async (client) => {
     if (action === "rename")
-      await client.rename(
-        remotePath(fields.oldPath, false),
-        remotePath(fields.newPath, false),
-      );
-    else if (action === "mkdir")
-      await client.ensureDir(remotePath(fields.path, false));
+      await client.rename(remotePath(fields.oldPath, false), remotePath(fields.newPath, false));
+    else if (action === "mkdir") await client.ensureDir(remotePath(fields.path, false));
     else {
       const path = remotePath(fields.file ?? fields.path, false);
       const parent = await client.list(posix.dirname(path));
@@ -165,8 +154,7 @@ export async function multipart(request: Request): Promise<Multipart> {
     const writes: Promise<void>[] = [];
     let error: Error | undefined;
     parser.on("field", (name, value, info) => {
-      if (info.valueTruncated)
-        error = new FileError(413, "Form field is too large.");
+      if (info.valueTruncated) error = new FileError(413, "Form field is too large.");
       else result.fields[name] = value;
     });
     parser.on("file", (field, stream, info) => {
@@ -175,9 +163,7 @@ export async function multipart(request: Request): Promise<Multipart> {
         stream.resume();
         return;
       }
-      const filename = posix.basename(
-        (info.filename || "").replaceAll("\\", "/"),
-      );
+      const filename = posix.basename((info.filename || "").replaceAll("\\", "/"));
       if (!filename || filename === "." || filename === "..") {
         error = new FileError(400, "Invalid filename.");
         stream.resume();
@@ -202,9 +188,7 @@ export async function multipart(request: Request): Promise<Multipart> {
         error = new FileError(413, "Too many multipart fields or files.");
       });
     await pipeline(
-      Readable.fromWeb(
-        request.body as unknown as import("node:stream/web").ReadableStream,
-      ),
+      Readable.fromWeb(request.body as unknown as import("node:stream/web").ReadableStream),
       parser,
       { signal: request.signal },
     );
@@ -242,11 +226,7 @@ export async function upload(
   });
   return path;
 }
-export async function archive(
-  credentials: Credentials,
-  directory: string,
-  signal: AbortSignal,
-) {
+export async function archive(credentials: Credentials, directory: string, signal: AbortSignal) {
   directory = remotePath(directory);
   const client = await ftp(credentials);
   const zip = archiver("zip", { zlib: { level: 1 } });
@@ -266,12 +246,10 @@ export async function archive(
   signal.addEventListener("abort", abort, { once: true });
   let count = 0;
   const visit = async (path: string, depth: number): Promise<void> => {
-    if (depth > 20)
-      throw new FileError(413, "Folder depth exceeds archive limit.");
+    if (depth > 20) throw new FileError(413, "Folder depth exceeds archive limit.");
     for (const entry of await client.list(path)) {
       if (signal.aborted) throw new Error("Cancelled");
-      if (++count > 10000)
-        throw new FileError(413, "Archive exceeds 10,000 entries.");
+      if (++count > 10000) throw new FileError(413, "Archive exceeds 10,000 entries.");
       const full = remotePath(posix.join(path, entry.name));
       const name = posix.relative(directory, full);
       if (name.startsWith("../") || entry.name.includes("/")) continue;
@@ -301,9 +279,7 @@ export async function archive(
   return new Response(Readable.toWeb(output) as unknown as ReadableStream, {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": attachment(
-        (posix.basename(directory) || "printer-storage") + ".zip",
-      ),
+      "Content-Disposition": attachment((posix.basename(directory) || "printer-storage") + ".zip"),
       "Cache-Control": "no-store",
     },
   });

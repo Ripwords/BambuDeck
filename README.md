@@ -58,4 +58,6 @@ bun install --frozen-lockfile
 bun run dev:server
 ```
 
-In another terminal, run `bun run dev`. Check changes with `bun run typecheck`, `bun run build`, and `bun run docs:build`. No automated tests are included.
+In another terminal, run `bun run dev`. Check changes with `bun run check`, `bun run typecheck`, `bun run build`, and `bun run docs:build`. No automated tests are included.
+
+Use Conventional Commits. `bun run fmt` formats with oxfmt; `bun run lint` checks with oxlint. Husky and CI enforce the conventions. See [AGENTS.md](AGENTS.md) for architecture and maintenance guidance, and use `bun run release --dry-run` to preview the changelogen release workflow.

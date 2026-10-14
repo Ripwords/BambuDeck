@@ -18,13 +18,7 @@ function stop() {
   controller = undefined;
 }
 async function next(epoch: number) {
-  if (
-    epoch !== generation ||
-    document.hidden ||
-    !active.value ||
-    !props.connected
-  )
-    return;
+  if (epoch !== generation || document.hidden || !active.value || !props.connected) return;
   const requestController = new AbortController();
   controller = requestController;
   const timeout = setTimeout(() => requestController.abort(), 18000);
@@ -37,8 +31,7 @@ async function next(epoch: number) {
     });
     if (!response.ok) throw new Error("Camera unavailable. Retrying…");
     const blob = await response.blob();
-    if (!blob.type.startsWith("image/"))
-      throw new Error("Waiting for a camera frame…");
+    if (!blob.type.startsWith("image/")) throw new Error("Waiting for a camera frame…");
     pending = URL.createObjectURL(blob);
     const img = new Image();
     await new Promise<void>((resolve, reject) => {
@@ -68,16 +61,12 @@ async function next(epoch: number) {
     clearTimeout(timeout);
     if (pending) URL.revokeObjectURL(pending);
     if (epoch === generation)
-      timer = setTimeout(
-        () => next(epoch),
-        Math.min(1000 * 2 ** failures, 15000),
-      );
+      timer = setTimeout(() => next(epoch), Math.min(1000 * 2 ** failures, 15000));
   }
 }
 function start() {
   stop();
-  if (!document.hidden && active.value && props.connected)
-    void next(generation);
+  if (!document.hidden && active.value && props.connected) void next(generation);
 }
 function download() {
   if (!frame.value) return;
@@ -142,17 +131,10 @@ onUnmounted(() => {
     </div>
     <div v-if="failures > 0" class="camera-retry">
       <span>{{ message }}</span
-      ><button class="text-button" @click="start">
-        <RefreshCw :size="14" />Retry
-      </button>
+      ><button class="text-button" @click="start"><RefreshCw :size="14" />Retry</button>
     </div>
   </section>
-  <AppModal
-    v-if="enlarged"
-    title="Camera"
-    class="camera-modal"
-    @close="enlarged = false"
-  >
+  <AppModal v-if="enlarged" title="Camera" class="camera-modal" @close="enlarged = false">
     <div class="camera-expanded-stage">
       <img v-if="frame" :src="frame" alt="Enlarged live printer camera" />
       <p v-else>{{ connected ? message : "Connect a printer to see its camera" }}</p>
@@ -162,9 +144,7 @@ onUnmounted(() => {
       <button @click="active = !active">
         {{ active ? "Pause view" : "Resume view" }}
       </button>
-      <button :disabled="!frame" @click="download">
-        <Download :size="16" />Save
-      </button>
+      <button :disabled="!frame" @click="download"><Download :size="16" />Save</button>
     </div>
   </AppModal>
 </template>

@@ -51,6 +51,14 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
+      - name: Validate release metadata
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bun -e 'const pkg = await Bun.file("package.json").json(); if (pkg.version !== process.env.VERSION) throw new Error("Tag does not match package version");'
+          bun scripts/release-notes.ts "$VERSION" > /dev/null
+      - run: bun run check
       - run: bun run typecheck
       - run: bun run build
       - run: bun run docs:build
@@ -104,6 +112,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
       - name: Prepare deployment asset
         env:
           VERSION: ${{ needs.verify.outputs.version }}
@@ -129,7 +140,7 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
           STABLE: ${{ needs.verify.outputs.stable }}
         run: |
-          printf 'Docker image: `%s:%s`\n\nDownload `compose.production.yaml`, then run:\n\n```sh\ndocker compose -f compose.production.yaml up -d\n```\n\nDocumentation: https://ripwords.github.io/BambuDeck/\n' "$IMAGE" "$VERSION" > release/notes.md
+          bun scripts/release-notes.ts "$VERSION" > release/notes.md
           flags=()
           if [[ "$STABLE" != 'true' ]]; then
             flags+=(--prerelease --latest=false)

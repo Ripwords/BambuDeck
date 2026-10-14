@@ -6,10 +6,10 @@ The repository is `Ripwords/BambuDeck`. Its GitHub Actions workflows validate ch
 
 In **Settings → Secrets and variables → Actions**, create:
 
-| Secret | Value |
-| --- | --- |
-| `DOCKERHUB_USERNAME` | Docker Hub account with push access to `ripwords/bambudeck`. |
-| `DOCKERHUB_TOKEN` | Docker Hub access token with permission to push that repository. |
+| Secret               | Value                                                            |
+| -------------------- | ---------------------------------------------------------------- |
+| `DOCKERHUB_USERNAME` | Docker Hub account with push access to `ripwords/bambudeck`.     |
+| `DOCKERHUB_TOKEN`    | Docker Hub access token with permission to push that repository. |
 
 Create the public `ripwords/bambudeck` repository on Docker Hub. Enter credentials directly into GitHub's secret fields; do not commit them or paste them into issue discussions.
 
@@ -17,13 +17,13 @@ In **Settings → Pages**, choose **GitHub Actions** as the build source. Pages 
 
 ## Workflows
 
-| Trigger | Result |
-| --- | --- |
-| Pull request or push to `main` | Typecheck and build the app and documentation. No automated tests. |
-| Push to `main` | Publish documentation through GitHub Pages. |
-| Push a stable `vX.Y.Z` tag | Publish AMD64/ARM64 Docker images with version tags and `latest`. |
-| Push a prerelease version tag | Publish a versioned preview image without replacing `latest`. |
-| Manually run Docker publishing | Publish the development `edge` image. |
+| Trigger                        | Result                                                                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Pull request or push to `main` | Validate Conventional Commits, formatting, linting, typecheck, and build the app and documentation. No automated tests. |
+| Push to `main`                 | Publish documentation through GitHub Pages.                                                                             |
+| Push a stable `vX.Y.Z` tag     | Publish AMD64/ARM64 Docker images with version tags and `latest`.                                                       |
+| Push a prerelease version tag  | Publish a versioned preview image without replacing `latest`.                                                           |
+| Manually run Docker publishing | Publish the development `edge` image.                                                                                   |
 
 After publishing a version tag, the workflow creates a GitHub Release with a version-pinned `compose.production.yaml` and `SHA256SUMS`. Download those assets when you want a deployment file tied to that release.
 
@@ -31,14 +31,16 @@ Docker builds use Buildx and a shared build cache. Credentials are supplied thro
 
 ## Publish a release
 
-Set the package version, update any affected docs, and merge the change into `main`. Then tag that commit:
+Commit changes with Conventional Commit messages and merge into `main`. Husky validates formatting, linting, and commit messages locally; CI validates commit messages and PR titles.
 
 ```sh
 git switch main
 git pull --ff-only
-git tag v0.1.0
-git push origin v0.1.0
+bun run release --dry-run
+bun run release --minor
 ```
+
+The release command checks the working tree, verifies local `main` matches `origin/main`, runs format/lint/type/build checks, and uses changelogen to update `CHANGELOG.md` and the package version. It then creates a release commit and annotated tag and pushes both atomically. Use `--patch`, `--minor`, or `--major`; these are literal increments, including before version 1.0. GitHub Actions creates release notes from the matching changelog section after publishing the image.
 
 Use the next version for subsequent releases. Stable tags publish the exact version plus moving minor, major, and `latest` tags. Pin deployments to an exact version for predictable upgrades. Prerelease tags such as `v0.2.0-rc.1` remain opt-in.
 

@@ -54,13 +54,7 @@ const models: Record<string, [string, number, number, number, number]> = {
   O1S: ["H2S", 350, 120, 65, 1],
 };
 export function capabilities(model: string): Capabilities {
-  const [name, nozzle, bed, chamber, extruders] = models[model] || [
-    "Printer",
-    300,
-    80,
-    0,
-    1,
-  ];
+  const [name, nozzle, bed, chamber, extruders] = models[model] || ["Printer", 300, 80, 0, 1];
   const enclosed = !!models[model] && !["N1", "N2S", "N9"].includes(model);
   return {
     display_name: `Bambu Lab ${name}`,
@@ -111,29 +105,13 @@ function scrub(value: unknown): unknown {
   if (!record(value)) return value;
   return Object.fromEntries(
     Object.entries(value)
-      .filter(
-        ([key]) =>
-          !/(?:password|access.?code|serial|^sn$|^ip$|ip_?addr|rtsp)/i.test(
-            key,
-          ),
-      )
+      .filter(([key]) => !/(?:password|access.?code|serial|^sn$|^ip$|ip_?addr|rtsp)/i.test(key))
       .map(([key, item]) => [key, scrub(item)]),
   );
 }
-function number(
-  fields: Fields,
-  key: string,
-  min: number,
-  max: number,
-  integer = true,
-): number {
+function number(fields: Fields, key: string, min: number, max: number, integer = true): number {
   const raw = fields[key];
-  if (
-    raw === undefined ||
-    raw === null ||
-    raw === "" ||
-    typeof raw === "boolean"
-  )
+  if (raw === undefined || raw === null || raw === "" || typeof raw === "boolean")
     throw new PrinterError(400, `${key} is required.`);
   const value = Number(raw);
   if (
@@ -147,25 +125,18 @@ function number(
 }
 function text(fields: Fields, key: string, max = 256): string {
   const value = fields[key];
-  if (
-    typeof value !== "string" ||
-    !value.trim() ||
-    value.length > max ||
-    value.includes("\0")
-  )
+  if (typeof value !== "string" || !value.trim() || value.length > max || value.includes("\0"))
     throw new PrinterError(400, `Invalid ${key}.`);
   return value;
 }
 function bool(value: unknown): boolean {
   if ([true, "true", "on", "1", 1].includes(value as never)) return true;
-  if ([false, "false", "off", "0", 0, undefined, ""].includes(value as never))
-    return false;
+  if ([false, "false", "off", "0", 0, undefined, ""].includes(value as never)) return false;
   throw new PrinterError(400, "Invalid boolean option.");
 }
 function choice(value: unknown, choices: string[]) {
   const selected = String(value);
-  if (!choices.includes(selected))
-    throw new PrinterError(400, `Choose ${choices.join(", ")}.`);
+  if (!choices.includes(selected)) throw new PrinterError(400, `Choose ${choices.join(", ")}.`);
   return selected;
 }
 const stageLabels = [
@@ -267,9 +238,7 @@ export class PrinterClient {
     this.model = inferredModel(profile.serial);
     this.camera = new CameraFeed(profile, () => ({
       model: this.model,
-      rtsp: record(this.telemetry.ipcam)
-        ? String(this.telemetry.ipcam.rtsp_url || "")
-        : "",
+      rtsp: record(this.telemetry.ipcam) ? String(this.telemetry.ipcam.rtsp_url || "") : "",
     }));
   }
   get connected() {
@@ -278,10 +247,7 @@ export class PrinterClient {
   connect(): Promise<void> {
     if (this.connected) return Promise.resolve();
     if (this.opening) return this.opening;
-    if (this.closed)
-      return Promise.reject(
-        new PrinterError(503, "Printer connection was closed."),
-      );
+    if (this.closed) return Promise.reject(new PrinterError(503, "Printer connection was closed."));
     this.opening = new Promise<void>((resolve, reject) => {
       const client =
         this.transport ||
@@ -303,10 +269,7 @@ export class PrinterClient {
       const timer = setTimeout(() => {
         cleanup();
         reject(
-          new PrinterError(
-            504,
-            "Printer connection timed out. Check LAN mode and credentials.",
-          ),
+          new PrinterError(504, "Printer connection timed out. Check LAN mode and credentials."),
         );
       }, 15000);
       const connected = () => {
@@ -315,12 +278,7 @@ export class PrinterClient {
       };
       const failed = () => {
         cleanup();
-        reject(
-          new PrinterError(
-            502,
-            "Printer connection failed. Check LAN mode and credentials.",
-          ),
-        );
+        reject(new PrinterError(502, "Printer connection failed. Check LAN mode and credentials."));
       };
       const cleanup = () => {
         clearTimeout(timer);
@@ -335,18 +293,14 @@ export class PrinterClient {
       if (!this.transport) {
         this.transport = client;
         client.on("connect", () => {
-          client.subscribe(
-            `device/${this.profile.serial}/report`,
-            { qos: 0 },
-            (error) => {
-              this.ready = !error;
-              this.emit();
-              if (!error) {
-                void this.command({ action: "refresh" }).catch(() => {});
-                void this.command({ action: "version" }).catch(() => {});
-              }
-            },
-          );
+          client.subscribe(`device/${this.profile.serial}/report`, { qos: 0 }, (error) => {
+            this.ready = !error;
+            this.emit();
+            if (!error) {
+              void this.command({ action: "refresh" }).catch(() => {});
+              void this.command({ action: "version" }).catch(() => {});
+            }
+          });
         });
         client.on("message", (_topic, payload) => this.receive(payload));
         client.on("error", () => {
@@ -458,23 +412,13 @@ export class PrinterClient {
     await this.camera.close();
     const client = this.transport;
     this.transport = null;
-    if (client)
-      await new Promise<void>((resolve) =>
-        client.end(true, {}, () => resolve()),
-      );
+    if (client) await new Promise<void>((resolve) => client.end(true, {}, () => resolve()));
     this.emit();
     this.listeners.clear();
   }
-  private async send(
-    section: string,
-    command: string,
-    fields: Fields = {},
-  ): Promise<Result> {
+  private async send(section: string, command: string, fields: Fields = {}): Promise<Result> {
     if (!this.connected || !this.transport)
-      throw new PrinterError(
-        503,
-        "Printer is offline. Reconnect before sending a command.",
-      );
+      throw new PrinterError(503, "Printer is offline. Reconnect before sending a command.");
     const sequence_id = String(++this.sequence);
     const payload = JSON.stringify({
       [section]: { command, sequence_id, ...fields },
@@ -491,11 +435,8 @@ export class PrinterClient {
         { qos: 0 },
         (error) => {
           clearTimeout(timer);
-          error
-            ? reject(
-                new PrinterError(502, "Printer command could not be sent."),
-              )
-            : resolve();
+          if (error) reject(new PrinterError(502, "Printer command could not be sent."));
+          else resolve();
         },
       );
     });
@@ -505,8 +446,7 @@ export class PrinterClient {
     return this.send("print", "gcode_line", { param: line.trimEnd() + "\n" });
   }
   command(input: URLSearchParams | Fields): Promise<Result> {
-    const fields: Fields =
-      input instanceof URLSearchParams ? Object.fromEntries(input) : input;
+    const fields: Fields = input instanceof URLSearchParams ? Object.fromEntries(input) : input;
     const action = String(fields.cmd || fields.action || "");
     const caps = capabilities(this.model);
     switch (action) {
@@ -530,9 +470,7 @@ export class PrinterClient {
       case "speed_ludi":
         return this.send("print", "print_speed", {
           param: String(
-            ["speed_silent", "speed_std", "speed_sport", "speed_ludi"].indexOf(
-              action,
-            ) + 1,
+            ["speed_silent", "speed_std", "speed_sport", "speed_ludi"].indexOf(action) + 1,
           ),
         });
       case "refresh":
@@ -555,12 +493,7 @@ export class PrinterClient {
               ? caps.max_bed_temp
               : caps.max_chamber_temp,
         );
-        const tool = number(
-          { index: fields.index ?? 0 },
-          "index",
-          0,
-          caps.num_extruders - 1,
-        );
+        const tool = number({ index: fields.index ?? 0 }, "index", 0, caps.num_extruders - 1);
         return this.gcode(
           target === "bed"
             ? `M140 S${temp}`
@@ -571,19 +504,12 @@ export class PrinterClient {
       }
       case "set_fan": {
         const fan = choice(fields.fan, ["part", "aux", "chamber", "all"]);
-        if (
-          (fan === "aux" && !caps.has_aux_fan) ||
-          (fan === "chamber" && !caps.has_chamber_fan)
-        )
+        if ((fan === "aux" && !caps.has_aux_fan) || (fan === "chamber" && !caps.has_chamber_fan))
           throw new PrinterError(400, "Fan is not supported by this printer.");
         const speed = Math.floor((number(fields, "speed", 0, 100) * 255) / 100);
         const fans =
           fan === "all"
-            ? [
-                1,
-                ...(caps.has_aux_fan ? [2] : []),
-                ...(caps.has_chamber_fan ? [3] : []),
-              ]
+            ? [1, ...(caps.has_aux_fan ? [2] : []), ...(caps.has_chamber_fan ? [3] : [])]
             : [{ part: 1, aux: 2, chamber: 3 }[fan]!];
         return this.gcode(fans.map((id) => `M106 P${id} S${speed}`).join("\n"));
       }
@@ -610,13 +536,8 @@ export class PrinterClient {
       }
       case "nozzle":
         return this.send("system", "set_accessories", {
-          nozzle_diameter: Number(
-            choice(fields.diameter, ["0.2", "0.4", "0.6", "0.8"]),
-          ),
-          nozzle_type: choice(fields.nozzle_type, [
-            "hardened_steel",
-            "stainless_steel",
-          ]),
+          nozzle_diameter: Number(choice(fields.diameter, ["0.2", "0.4", "0.6", "0.8"])),
+          nozzle_type: choice(fields.nozzle_type, ["hardened_steel", "stainless_steel"]),
         });
       case "marker":
         return this.send("xcam", "xcam_control_set", {
@@ -664,10 +585,7 @@ export class PrinterClient {
           throw new PrinterError(400, "Invalid AMS unit or slot.");
         const color = text(fields, "color", 8);
         if (!/^[\da-f]{8}$/i.test(color))
-          throw new PrinterError(
-            400,
-            "Color requires eight RGBA hexadecimal digits.",
-          );
+          throw new PrinterError(400, "Color requires eight RGBA hexadecimal digits.");
         const min = number(fields, "min_temp", 0, caps.max_nozzle_temp),
           max = number(fields, "max_temp", min, caps.max_nozzle_temp);
         return this.send("print", "ams_filament_setting", {

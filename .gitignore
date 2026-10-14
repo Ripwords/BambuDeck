@@ -20,3 +20,5 @@ data/
 *.crt
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+
+.husky/_/

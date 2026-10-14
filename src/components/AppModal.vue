@@ -15,11 +15,7 @@ onMounted(() => dialog.value?.showModal());
   >
     <div class="modal-heading">
       <h2>{{ title }}</h2>
-      <button
-        class="icon-button"
-        aria-label="Close dialog"
-        @click="emit('close')"
-      >
+      <button class="icon-button" aria-label="Close dialog" @click="emit('close')">
         <X :size="20" />
       </button>
     </div>

@@ -3,6 +3,7 @@ FROM oven/bun:1.4.2 AS build
 COPY --from=node-toolchain /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
 COPY package.json bun.lock ./
+COPY scripts/prepare.ts ./scripts/prepare.ts
 RUN bun install --frozen-lockfile
 COPY index.html vite.config.ts tsconfig*.json tokens.css ./
 COPY src/ ./src/
@@ -14,6 +15,7 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json bun.lock ./
+COPY scripts/prepare.ts ./scripts/prepare.ts
 RUN bun install --frozen-lockfile --production && mkdir -p /data/filament-profiles && chown -R bun:bun /data /app
 COPY --from=build --chown=bun:bun /app/dist ./dist
 COPY --chown=bun:bun server/ ./server/

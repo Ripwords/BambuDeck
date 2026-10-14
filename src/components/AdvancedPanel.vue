@@ -48,9 +48,7 @@ async function execute(action: string, values: Record<string, unknown> = {}) {
 async function search() {
   busy.value = true;
   try {
-    profiles.value = await api(
-      props.base + "/profiles?q=" + encodeURIComponent(query.value),
-    );
+    profiles.value = await api(props.base + "/profiles?q=" + encodeURIComponent(query.value));
   } catch (e) {
     emit("error", e instanceof Error ? e.message : String(e));
   } finally {
@@ -74,8 +72,7 @@ function selectProfile(item: any) {
         <div>
           <h2>Printer preferences</h2>
           <p>
-            Commands apply to the selected printer. Availability depends on its
-            model and firmware.
+            Commands apply to the selected printer. Availability depends on its model and firmware.
           </p>
         </div>
         <fieldset :disabled="!connected || busy" class="preferences">
@@ -89,19 +86,13 @@ function selectProfile(item: any) {
             class="preference-row"
           >
             <span>{{ label }}</span
-            ><button @click="execute('option', { option, enabled: true })">
-              Enable</button
-            ><button @click="execute('option', { option, enabled: false })">
-              Disable
-            </button>
+            ><button @click="execute('option', { option, enabled: true })">Enable</button
+            ><button @click="execute('option', { option, enabled: false })">Disable</button>
           </div>
           <div class="preference-row">
             <span>Build plate marker detection</span
-            ><button @click="execute('marker', { enabled: true })">
-              Enable</button
-            ><button @click="execute('marker', { enabled: false })">
-              Disable
-            </button>
+            ><button @click="execute('marker', { enabled: true })">Enable</button
+            ><button @click="execute('marker', { enabled: false })">Disable</button>
           </div>
         </fieldset>
       </section>
@@ -155,8 +146,7 @@ function selectProfile(item: any) {
           <fieldset :disabled="!connected || busy">
             <h3>G-code console</h3>
             <p class="help">
-              Commands execute immediately. Check movement and heating
-              instructions before sending.
+              Commands execute immediately. Check movement and heating instructions before sending.
             </p>
             <label
               >G-code<textarea
@@ -173,8 +163,7 @@ function selectProfile(item: any) {
       <details class="panel advanced-details">
         <summary>Device details & firmware</summary>
         <div class="button-group">
-          <button :disabled="!connected || busy" @click="execute('refresh')">
-            Refresh status</button
+          <button :disabled="!connected || busy" @click="execute('refresh')">Refresh status</button
           ><button :disabled="!connected || busy" @click="execute('version')">
             Request firmware info
           </button>
@@ -186,25 +175,12 @@ function selectProfile(item: any) {
       ><details class="panel advanced-details">
         <summary>Configure filament & flow</summary>
         <form class="profile-search" @submit.prevent="search">
-          <label
-            >Search filament profiles<input
-              v-model="query"
-              placeholder="PLA, PETG…" /></label
+          <label>Search filament profiles<input v-model="query" placeholder="PLA, PETG…" /></label
           ><button :disabled="!connected || busy">Search</button>
         </form>
         <div v-if="profiles.length" class="profile-results">
-          <button
-            v-for="(item, index) in profiles"
-            :key="index"
-            @click="selectProfile(item)"
-          >
-            {{
-              item.Name ||
-              item.name ||
-              item.ID ||
-              item.id ||
-              "Profile " + (index + 1)
-            }}
+          <button v-for="(item, index) in profiles" :key="index" @click="selectProfile(item)">
+            {{ item.Name || item.name || item.ID || item.id || "Profile " + (index + 1) }}
           </button>
         </div>
         <form @submit.prevent="execute('filament', filament)">
@@ -228,12 +204,8 @@ function selectProfile(item: any) {
                 v-model="filament.filament_id"
                 required
                 placeholder="GFA00" /></label
-            ><label
-              >Setting ID<input v-model="filament.setting_id" required /></label
-            ><label
-              >Material<input
-                v-model="filament.filament_type"
-                required /></label
+            ><label>Setting ID<input v-model="filament.setting_id" required /></label
+            ><label>Material<input v-model="filament.filament_type" required /></label
             ><label
               >Color (RGBA hex)<input
                 v-model="filament.color"
@@ -299,14 +271,12 @@ function selectProfile(item: any) {
                 max="3"
                 required /></label
             ><label class="checkbox-label"
-              ><input v-model="ams.startup_read" type="checkbox" />Read filament
-              on startup</label
+              ><input v-model="ams.startup_read" type="checkbox" />Read filament on startup</label
             ><label class="checkbox-label"
-              ><input v-model="ams.tray_read" type="checkbox" />Read filament on
-              insertion</label
+              ><input v-model="ams.tray_read" type="checkbox" />Read filament on insertion</label
             ><label class="checkbox-label"
-              ><input v-model="ams.calibrate_remain" type="checkbox" />Estimate
-              remaining filament</label
+              ><input v-model="ams.calibrate_remain" type="checkbox" />Estimate remaining
+              filament</label
             ><button>Save AMS settings</button>
             <div class="button-group">
               <button

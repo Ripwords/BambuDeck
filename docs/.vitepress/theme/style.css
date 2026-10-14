@@ -6,7 +6,7 @@
   --vp-c-bg: #f8f7f2;
   --vp-c-bg-alt: #f0efe9;
   --vp-c-bg-soft: #f0efe9;
-  --vp-font-family-base: 'Inter', system-ui, sans-serif;
+  --vp-font-family-base: "Inter", system-ui, sans-serif;
 }
 
 .dark {

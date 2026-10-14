@@ -41,8 +41,7 @@ export class CameraFeed {
     if (signal?.aborted) throw new CameraError("Camera request cancelled.");
     if (this.idle) clearTimeout(this.idle);
     this.idle = setTimeout(() => this.stop(), 30000);
-    if (!this.socket && !this.process && Date.now() >= this.retryAfter)
-      this.start();
+    if (!this.socket && !this.process && Date.now() >= this.retryAfter) this.start();
     if (this.frame && Date.now() - this.frameTime < 5000) return this.frame;
     return new Promise<Buffer>((resolve, reject) => {
       const cleanup = () => {
@@ -60,14 +59,11 @@ export class CameraFeed {
           reject(error);
         },
       };
-      const aborted = () =>
-        waiter.reject(new CameraError("Camera request cancelled."));
+      const aborted = () => waiter.reject(new CameraError("Camera request cancelled."));
       const timeout = setTimeout(
         () =>
           waiter.reject(
-            new CameraError(
-              "Camera unavailable. Check LAN camera access and streaming settings.",
-            ),
+            new CameraError("Camera unavailable. Check LAN camera access and streaming settings."),
           ),
         12000,
       );
@@ -82,18 +78,7 @@ export class CameraFeed {
     const { model, rtsp } = this.info();
     if (
       rtsp ||
-      [
-        "BL-P001",
-        "BL-P002",
-        "C13",
-        "O1C",
-        "O1C2",
-        "O1D",
-        "O1E",
-        "O1S",
-        "N6",
-        "N7",
-      ].includes(model)
+      ["BL-P001", "BL-P002", "C13", "O1C", "O1C2", "O1D", "O1E", "O1S", "N6", "N7"].includes(model)
     ) {
       let url: URL;
       try {
@@ -109,9 +94,7 @@ export class CameraFeed {
         this.failed(current);
         return;
       }
-      url.hostname = this.profile.host.includes(":")
-        ? `[${this.profile.host}]`
-        : this.profile.host;
+      url.hostname = this.profile.host.includes(":") ? `[${this.profile.host}]` : this.profile.host;
       url.username = "bblp";
       url.password = this.profile.code;
       const child = spawn(
@@ -178,10 +161,7 @@ export class CameraFeed {
     for (;;) {
       const start = this.buffer.indexOf(Buffer.from([0xff, 0xd8]));
       if (start < 0) {
-        this.buffer =
-          this.buffer.at(-1) === 0xff
-            ? this.buffer.subarray(-1)
-            : Buffer.alloc(0);
+        this.buffer = this.buffer.at(-1) === 0xff ? this.buffer.subarray(-1) : Buffer.alloc(0);
         return;
       }
       const end = this.buffer.indexOf(Buffer.from([0xff, 0xd9]), start + 2);
@@ -208,9 +188,7 @@ export class CameraFeed {
     this.stop();
     for (const waiter of [...this.waiters])
       waiter.reject(
-        new CameraError(
-          "Camera unavailable. Check LAN camera access and streaming settings.",
-        ),
+        new CameraError("Camera unavailable. Check LAN camera access and streaming settings."),
       );
   }
   private stop() {

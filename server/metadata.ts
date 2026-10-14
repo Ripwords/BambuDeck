@@ -27,9 +27,7 @@ const array = <T>(value: T | T[] | undefined): T[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
 function xmlMetadata(value: unknown): Values {
   if (!value || typeof value !== "object") return {};
-  const entries = array(
-    (value as Values).metadata as Values | Values[] | undefined,
-  );
+  const entries = array((value as Values).metadata as Values | Values[] | undefined);
   return Object.fromEntries(
     entries
       .filter(
@@ -42,10 +40,8 @@ function xmlMetadata(value: unknown): Values {
 }
 function openZip(path: string): Promise<ZipFile> {
   return new Promise((resolve, reject) =>
-    open(
-      path,
-      { lazyEntries: true, autoClose: true, validateEntrySizes: true },
-      (error, zip) => (error || !zip ? reject(error) : resolve(zip)),
+    open(path, { lazyEntries: true, autoClose: true, validateEntrySizes: true }, (error, zip) =>
+      error || !zip ? reject(error) : resolve(zip),
     ),
   );
 }
@@ -61,9 +57,7 @@ function entryBytes(zip: ZipFile, entry: Entry): Promise<Buffer> {
       stream.on("data", (chunk: Buffer) => {
         count += chunk.length;
         if (count > 8 * 1024 * 1024)
-          stream.destroy(
-            new FileError(413, "3MF metadata entry is too large."),
-          );
+          stream.destroy(new FileError(413, "3MF metadata entry is too large."));
         else chunks.push(chunk);
       });
       stream.on("end", () => resolve(Buffer.concat(chunks)));
@@ -71,15 +65,9 @@ function entryBytes(zip: ZipFile, entry: Entry): Promise<Buffer> {
     }),
   );
 }
-export async function parse3mf(
-  path: string,
-  filename: string,
-): Promise<Metadata> {
+export async function parse3mf(path: string, filename: string): Promise<Metadata> {
   const zip = await openZip(path).catch(() => {
-    throw new FileError(
-      400,
-      "The selected file is not a readable 3MF archive.",
-    );
+    throw new FileError(400, "The selected file is not a readable 3MF archive.");
   });
   const result: Metadata = {
     filename,
@@ -96,8 +84,7 @@ export async function parse3mf(
       zip.on("end", resolve);
       zip.on("entry", (entry: Entry) => {
         void (async () => {
-          if (++entries > 20000)
-            throw new FileError(413, "3MF contains too many entries.");
+          if (++entries > 20000) throw new FileError(413, "3MF contains too many entries.");
           const name = entry.fileName;
           if (
             !/^Metadata\/(slice_info\.config|model_settings\.config|project_settings\.config|plate_\d+(?:_small)?\.png)$/i.test(
@@ -111,13 +98,9 @@ export async function parse3mf(
           if (
             entry.uncompressedSize > 8 * 1024 * 1024 ||
             expanded > 32 * 1024 * 1024 ||
-            (entry.compressedSize > 0 &&
-              entry.uncompressedSize / entry.compressedSize > 200)
+            (entry.compressedSize > 0 && entry.uncompressedSize / entry.compressedSize > 200)
           )
-            throw new FileError(
-              413,
-              "3MF metadata exceeds safe extraction limits.",
-            );
+            throw new FileError(413, "3MF metadata exceeds safe extraction limits.");
           const bytes = await entryBytes(zip, entry);
           if (/\.png$/i.test(name)) result.thumbnails.set(name, bytes);
           else if (name.endsWith("project_settings.config")) {
@@ -144,18 +127,12 @@ export async function parse3mf(
                 result.plates.push(item);
               }
               Object.assign(item, fields, { index });
-              const filaments = array(
-                plate.filament as Values | Values[] | undefined,
-              );
+              const filaments = array(plate.filament as Values | Values[] | undefined);
               if (filaments.length) {
                 item.filaments = filaments;
-                result.filaments.push(
-                  ...filaments.map((f) => ({ ...f, plate: index })),
-                );
+                result.filaments.push(...filaments.map((f) => ({ ...f, plate: index })));
               }
-              const objects = array(
-                plate.object as Values | Values[] | undefined,
-              );
+              const objects = array(plate.object as Values | Values[] | undefined);
               if (objects.length) item.objects = objects;
             }
           }
@@ -184,33 +161,29 @@ export async function parse3mf(
 export async function resolvePrintFile(
   credentials: Credentials,
   print: Values,
+  includeGcode = false,
 ): Promise<string | undefined> {
   const names = [print.gcode_file, print.subtask_name]
     .filter(
       (value): value is string =>
-        typeof value === "string" &&
-        value.length > 0 &&
-        !/^\/?Metadata\//i.test(value),
+        typeof value === "string" && value.length > 0 && !/^\/?Metadata\//i.test(value),
     )
     .flatMap((value) => {
       const path = value
         .replace(/^(?:file|ftp|ftps):\/\/[^/]*/i, "")
         .replace(/^\/?(?:sdcard|mnt\/sdcard)\//, "/");
       try {
-        return [
-          path,
-          decodeURIComponent(path),
-          decodeURIComponent(path.replace(/\+/g, " ")),
-        ];
+        return [path, decodeURIComponent(path), decodeURIComponent(path.replace(/\+/g, " "))];
       } catch {
         return [path];
       }
     });
   if (!names.length) return;
-  const stem = (name: string) =>
-    posix.basename(name).replace(/(?:\.gcode)?\.3mf$|\.gcode$/i, "");
+  const supported = (name: string) =>
+    /\.3mf$/i.test(name) || (includeGcode && /\.gcode$/i.test(name));
+  const stem = (name: string) => posix.basename(name).replace(/(?:\.gcode)?\.3mf$|\.gcode$/i, "");
   return withFTP(credentials, async (client) => {
-    for (const name of new Set(names.filter((name) => /\.3mf$/i.test(name)))) {
+    for (const name of new Set(names.filter(supported))) {
       const path = remotePath(name, false);
       try {
         await client.size(path);
@@ -223,7 +196,7 @@ export async function resolvePrintFile(
         for (const file of await client.list(directory)) {
           if (
             file.isFile &&
-            /\.3mf$/i.test(file.name) &&
+            supported(file.name) &&
             names.some((name) => stem(name) === stem(file.name))
           ) {
             matches.push(posix.join(directory, file.name));
@@ -234,10 +207,7 @@ export async function resolvePrintFile(
     return matches.length === 1 ? matches[0] : undefined;
   });
 }
-export async function loadMetadata(
-  credentials: Credentials,
-  file: string,
-): Promise<Metadata> {
+export async function loadMetadata(credentials: Credentials, file: string): Promise<Metadata> {
   file = remotePath(file, false);
   if (!/\.3mf$/i.test(file))
     return {
@@ -248,37 +218,27 @@ export async function loadMetadata(
       thumbnails: new Map(),
     };
   const client = await ftp(credentials);
-  const directory = await mkdtemp(join(tmpdir(), "bambudeck-metadata-")).catch(
-    (error) => {
-      client.close();
-      throw error;
-    },
-  );
+  const directory = await mkdtemp(join(tmpdir(), "bambudeck-metadata-")).catch((error) => {
+    client.close();
+    throw error;
+  });
   const path = join(directory, "project.3mf");
   try {
     const size = await client.size(file);
     if (size > 512 * 1024 * 1024)
-      throw new FileError(
-        413,
-        "Metadata extraction is limited to 512 MiB 3MF files.",
-      );
+      throw new FileError(413, "Metadata extraction is limited to 512 MiB 3MF files.");
     let total = 0;
     const limiter = new Transform({
       transform(chunk: Buffer, _encoding, callback) {
         total += chunk.length;
         callback(
-          total > 512 * 1024 * 1024
-            ? new FileError(413, "3MF file is too large.")
-            : null,
+          total > 512 * 1024 * 1024 ? new FileError(413, "3MF file is too large.") : null,
           chunk,
         );
       },
     });
     let writeError: unknown;
-    const writing = pipeline(
-      limiter,
-      createWriteStream(path, { mode: 0o600 }),
-    ).catch((error) => {
+    const writing = pipeline(limiter, createWriteStream(path, { mode: 0o600 })).catch((error) => {
       writeError = error;
       client.close();
     });
@@ -295,10 +255,7 @@ export async function loadMetadata(
     return await parse3mf(path, file);
   } catch (error) {
     if (error instanceof FileError) throw error;
-    throw new FileError(
-      502,
-      "Could not download 3MF metadata from printer storage.",
-    );
+    throw new FileError(502, "Could not download 3MF metadata from printer storage.");
   } finally {
     client.close();
     await rm(directory, { recursive: true, force: true });
@@ -325,18 +282,14 @@ export function publicMetadata(metadata: Metadata) {
 let profileCache: { until: number; values: Values[] } | undefined;
 export async function filamentProfiles(query: string) {
   if (!profileCache || profileCache.until < Date.now()) {
-    const root =
-      process.env.BAMBUDECK_FILAMENT_DIR || "/data/filament-profiles";
+    const root = process.env.BAMBUDECK_FILAMENT_DIR || "/data/filament-profiles";
     const documents = new Map<string, Values>();
     let count = 0;
     const visit = async (directory: string, depth: number): Promise<void> => {
       if (depth > 8) return;
       for (const entry of await readdir(directory, { withFileTypes: true })) {
         if (++count > 15000)
-          throw new FileError(
-            413,
-            "Filament profile directory has too many entries.",
-          );
+          throw new FileError(413, "Filament profile directory has too many entries.");
         const path = join(directory, entry.name);
         if (entry.isDirectory()) await visit(path, depth + 1);
         else if (entry.isFile() && entry.name.endsWith(".json")) {
@@ -360,8 +313,7 @@ export async function filamentProfiles(query: string) {
         "Mount Bambu Studio filament JSON profiles in /data/filament-profiles.",
       );
     }
-    const scalar = (value: unknown): unknown =>
-      Array.isArray(value) ? value[0] : value;
+    const scalar = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value);
     const merge = (name: string, seen = new Set<string>()): Values => {
       const value = documents.get(name) || {};
       if (seen.has(name) || seen.size > 20) return value;
@@ -375,8 +327,7 @@ export async function filamentProfiles(query: string) {
         return {
           Name: name,
           ID: scalar(p.filament_id) || "",
-          SettingID:
-            scalar(p.setting_id) || scalar(p.filament_settings_id) || "",
+          SettingID: scalar(p.setting_id) || scalar(p.filament_settings_id) || "",
           Type: scalar(p.filament_type) || "",
           TempMin: Number(scalar(p.nozzle_temperature_range_low) || 190),
           TempMax: Number(scalar(p.nozzle_temperature_range_high) || 230),
@@ -389,8 +340,6 @@ export async function filamentProfiles(query: string) {
   }
   const needle = query.toLowerCase().slice(0, 200);
   return profileCache.values
-    .filter((item) =>
-      `${item.Name} ${item.ID} ${item.Type}`.toLowerCase().includes(needle),
-    )
+    .filter((item) => `${item.Name} ${item.ID} ${item.Type}`.toLowerCase().includes(needle))
     .slice(0, 250);
 }

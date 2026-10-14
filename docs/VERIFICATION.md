@@ -24,3 +24,11 @@ No physical printer or Home Assistant broker was supplied. MQTT command acceptan
 Camera delivery uses ordinary same-origin JPEG images and avoids Safari fullscreen and long-lived MJPEG requirements. Desktop browser behavior was reviewed; a physical iPhone/iPad and its printer camera connection were not available. Trusted HTTPS is required for full PWA installation on a LAN address.
 
 No automated tests were added or run. The checks above were build, manual API, browser inspection, and container checks.
+
+## Authentication and architecture update
+
+Manual API review with isolated temporary databases covered setup, login/logout, existing Argon2-password migration, saved printer retention, cross-origin rejection, disabled signup, and session persistence after restart. Printer CRUD and settings behavior were inspected without connecting to a real printer. The server and frontend now use feature modules.
+
+## Preview boundaries
+
+Sliced 3MF and raw G-code previews show planned extrusion geometry. A current-layer selector can follow the reported layer number; it does not infer live toolhead coordinates. Parsing limits include source size, expanded G-code size, layer count, and segment count. Unsupported arcs are omitted with a visible warning. STL model previews are bounded and do not provide sliced layers. Unsliced 3MF must be sliced first.

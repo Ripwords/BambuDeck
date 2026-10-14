@@ -6,14 +6,13 @@ export async function api<T = any>(
   const headers: Record<string, string> = {};
   if (method !== "GET") headers["X-Requested-With"] = "BambuDeck";
   const native = body instanceof FormData || body instanceof URLSearchParams;
-  if (body !== undefined && !native)
-    headers["Content-Type"] = "application/json";
+  if (body !== undefined && !native) headers["Content-Type"] = "application/json";
   const response = await fetch(url, {
     method,
     headers,
     credentials: "same-origin",
     cache: "no-store",
-    body: body === undefined ? undefined : native ? body : JSON.stringify(body),
+    ...(body === undefined ? {} : { body: native ? body : JSON.stringify(body) }),
   });
   if (!response.ok) {
     let message = await response.text();
@@ -28,14 +27,9 @@ export async function api<T = any>(
     : ((await response.text()) as T);
 }
 export function form(values: Record<string, unknown>) {
-  return new URLSearchParams(
-    Object.entries(values).map(([key, value]) => [key, String(value)]),
-  );
+  return new URLSearchParams(Object.entries(values).map(([key, value]) => [key, String(value)]));
 }
-export function merge(
-  target: Record<string, any>,
-  source: Record<string, any>,
-) {
+export function merge(target: Record<string, any>, source: Record<string, any>) {
   for (const [key, value] of Object.entries(source)) {
     if (value && typeof value === "object" && !Array.isArray(value)) {
       if (!target[key] || typeof target[key] !== "object") target[key] = {};

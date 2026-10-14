@@ -15,11 +15,10 @@ function base(id: string) {
   return `bambudeck/${id}`;
 }
 function publish(topic: string, value: unknown, retain = true) {
-  broker?.publish(
-    topic,
-    typeof value === "string" ? value : JSON.stringify(value),
-    { retain, qos: 0 },
-  );
+  broker?.publish(topic, typeof value === "string" ? value : JSON.stringify(value), {
+    retain,
+    qos: 0,
+  });
 }
 function discover(entry: Entry) {
   const id = entry.profile.id,
@@ -64,20 +63,13 @@ function discover(entry: Entry) {
       state_topic: topic + "/state",
       value_template: `{{ value_json.print.${field} | default('unknown') }}`,
       ...(unit ? { unit_of_measurement: unit } : {}),
-      ...(unit === "°C"
-        ? { device_class: "temperature", state_class: "measurement" }
-        : {}),
+      ...(unit === "°C" ? { device_class: "temperature", state_class: "measurement" } : {}),
     });
   for (const cmd of ["pause", "resume", "stop"])
     add("button", cmd, {
       command_topic: topic + "/command",
       payload_press: JSON.stringify({ cmd }),
-      icon:
-        cmd === "stop"
-          ? "mdi:stop"
-          : cmd === "pause"
-            ? "mdi:pause"
-            : "mdi:play",
+      icon: cmd === "stop" ? "mdi:stop" : cmd === "pause" ? "mdi:pause" : "mdi:play",
     });
   add("switch", "chamber_light", {
     command_topic: topic + "/light/set",
@@ -109,19 +101,14 @@ function discover(entry: Entry) {
       mode: "box",
     });
   broker?.subscribe(topic + "/#");
-  publish(
-    topic + "/availability",
-    entry.client.connected ? "online" : "offline",
-  );
+  publish(topic + "/availability", entry.client.connected ? "online" : "offline");
   publish(topic + "/state", entry.client.status());
 }
 export async function startHomeAssistant(settings: Settings) {
   await stopHomeAssistant();
   config = settings;
   if (!settings.mqttBroker) return;
-  const url = settings.mqttBroker
-    .replace(/^tcp:/, "mqtt:")
-    .replace(/^(ssl|tls):/, "mqtts:");
+  const url = settings.mqttBroker.replace(/^tcp:/, "mqtt:").replace(/^(ssl|tls):/, "mqtts:");
   broker = mqtt.connect(url, {
     username: settings.mqttUser || undefined,
     password: settings.mqttPassword || undefined,
@@ -159,11 +146,7 @@ export async function startHomeAssistant(settings: Settings) {
       } catch {
         return;
       }
-    } else if (
-      set === "set" &&
-      target === "light" &&
-      ["ON", "OFF"].includes(payload)
-    )
+    } else if (set === "set" && target === "light" && ["ON", "OFF"].includes(payload))
       command = { cmd: payload === "ON" ? "light_on" : "light_off" };
     else if (
       set === "set" &&
@@ -171,15 +154,9 @@ export async function startHomeAssistant(settings: Settings) {
       ["silent", "standard", "sport", "ludicrous"].includes(payload)
     )
       command = {
-        cmd:
-          "speed_" +
-          ({ standard: "std", ludicrous: "ludi" }[payload] || payload),
+        cmd: "speed_" + ({ standard: "std", ludicrous: "ludi" }[payload] || payload),
       };
-    else if (
-      set === "set" &&
-      ["nozzle", "bed"].includes(target || "") &&
-      /^\d{1,3}$/.test(payload)
-    )
+    else if (set === "set" && ["nozzle", "bed"].includes(target || "") && /^\d{1,3}$/.test(payload))
       command = { cmd: "set_temp", target, temp: Number(payload) };
     if (command) void entry.client.command(command).catch(() => {});
   });
@@ -189,10 +166,7 @@ export function attachHomeAssistant(profile: Printer, client: PrinterClient) {
   const entry: Entry = { profile, client, topics: [], unsubscribe: () => {} };
   entry.unsubscribe = client.subscribe((status) => {
     publish(base(profile.id) + "/state", status);
-    publish(
-      base(profile.id) + "/availability",
-      client.connected ? "online" : "offline",
-    );
+    publish(base(profile.id) + "/availability", client.connected ? "online" : "offline");
   });
   devices.set(profile.id, entry);
   if (broker?.connected) discover(entry);

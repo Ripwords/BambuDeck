@@ -8,20 +8,20 @@ APP_ORIGIN=https://printer.example.com
 BAMBUDECK_VERSION=latest
 ```
 
-| Variable | Purpose |
-| --- | --- |
-| `DASHBOARD_PORT` | Host port; defaults to `3000`. |
-| `APP_ORIGIN` | Exact external origin, including a nonstandard port. Set this when using a reverse proxy or HTTPS. |
-| `BAMBUDECK_VERSION` | Published image tag used by production Compose; defaults to `latest`. |
-| `APP_ENCRYPTION_KEY` | Optional base64-encoded 32-byte key. Otherwise the app creates `/data/secret.key`. |
-| `TLS_CERT_FILE` / `TLS_KEY_FILE` | Container paths for direct HTTPS. Add them through a Compose override. |
-| `DATA_DIR` | Server storage path; `/data` in Docker. Keep the persistent mount aligned with it. |
+| Variable                         | Purpose                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `DASHBOARD_PORT`                 | Host port; defaults to `3000`.                                                                     |
+| `APP_ORIGIN`                     | Exact external origin, including a nonstandard port. Set this when using a reverse proxy or HTTPS. |
+| `BAMBUDECK_VERSION`              | Published image tag used by production Compose; defaults to `latest`.                              |
+| `APP_ENCRYPTION_KEY`             | Optional base64-encoded 32-byte key. Otherwise the app creates `/data/secret.key`.                 |
+| `TLS_CERT_FILE` / `TLS_KEY_FILE` | Container paths for direct HTTPS. Add them through a Compose override.                             |
+| `DATA_DIR`                       | Server storage path; `/data` in Docker. Keep the persistent mount aligned with it.                 |
 
 When supplying an encryption key, preserve exactly the same value across deployments. Changing or losing it prevents decryption of saved credentials. Keep environment files out of Git.
 
 ## Storage and authentication
 
-SQLite stores encrypted printer addresses, serial numbers, LAN codes, and Home Assistant broker credentials using AES-256-GCM. The dashboard password uses Argon2. Sessions use opaque HttpOnly cookies; the database stores their hashes.
+SQLite stores encrypted printer addresses, serial numbers, LAN codes, and Home Assistant broker credentials using AES-256-GCM. The dashboard password uses Argon2. Better Auth manages the single administrator and seven-day sessions using HttpOnly cookies. Its authentication tables are not encrypted; printer and broker credentials remain encrypted. Existing passwords migrate automatically, while existing browser sessions require signing in again. Public registration is disabled.
 
 The generated key file has restricted permissions. Access to both the database and its key permits decryption, so protect the entire backup. The PWA caches static assets, not printer API responses or camera frames.
 
@@ -64,6 +64,7 @@ bun run dev
 Vite serves `http://localhost:5173` and proxies the API to Bun. Local data lives in `./data`.
 
 ```sh
+bun run check
 bun run typecheck
 bun run build
 bun run docs:dev
