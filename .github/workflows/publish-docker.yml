@@ -23,7 +23,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       stable: ${{ steps.version.outputs.stable }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate version
         id: version
         env:
@@ -44,7 +44,7 @@ jobs:
             echo 'Expected vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease' >&2
             exit 1
           fi
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - uses: oven-sh/setup-bun@v2
@@ -59,14 +59,14 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: metadata
         with:
           images: ${{ env.IMAGE }}
@@ -80,7 +80,7 @@ jobs:
             org.opencontainers.image.title=BambuDeck
             org.opencontainers.image.description=Private LAN dashboard for Bambu Lab printers
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         id: image
         with:
           context: .
@@ -103,7 +103,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Prepare deployment asset
         env:
           VERSION: ${{ needs.verify.outputs.version }}
