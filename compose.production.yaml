@@ -1,0 +1,23 @@
+services:
+  dashboard:
+    image: ripwords/bambudeck:${BAMBUDECK_VERSION:-latest}
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    volumes:
+      - dashboard-data:/data
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:-}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
+      NODE_ENV: production
+      PORT: "3000"
+      DATA_DIR: /data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 20s
+
+volumes:
+  dashboard-data:
