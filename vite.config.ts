@@ -7,7 +7,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
+      includeAssets: ["favicon.ico", "favicon-32.png", "favicon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "BambuDeck",
         short_name: "BambuDeck",
@@ -39,7 +39,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        globPatterns: ["**/*.{js,css,html,ico,svg,png,woff2}"],
         navigateFallbackDenylist: [/^\/api\//, /^\/camera/],
         runtimeCaching: [],
         cleanupOutdatedCaches: true,
