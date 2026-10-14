@@ -1,5 +1,5 @@
 FROM node:22-bookworm-slim AS node-toolchain
-FROM oven/bun:1.4.2 AS build
+FROM oven/bun:1.4.3 AS build
 COPY --from=node-toolchain /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
 COPY package.json bun.lock ./
@@ -9,7 +9,7 @@ COPY src/ ./src/
 COPY public/ ./public/
 RUN bun run build
 
-FROM oven/bun:1.4.2-slim AS runtime
+FROM oven/bun:1.4.3-slim AS runtime
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
