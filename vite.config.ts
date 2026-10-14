@@ -7,7 +7,13 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["favicon.ico", "favicon-32.png", "favicon.svg", "apple-touch-icon.png"],
+      includeAssets: [
+        "favicon.ico",
+        "favicon-32.png",
+        "favicon.svg",
+        "apple-touch-icon.png",
+        "apple-touch-icon-77af8b5b.png",
+      ],
       manifest: {
         name: "BambuDeck",
         short_name: "BambuDeck",
