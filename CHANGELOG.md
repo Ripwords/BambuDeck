@@ -1,18 +1,5 @@
 # Changelog
 
-## v0.3.2
-
-[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.3.1...v0.3.2)
-
-### 🩹 Fixes
-
-- **http:** Preserve static asset size in HEAD responses ([16b70c9](https://github.com/Ripwords/BambuDeck/commit/16b70c9))
-- **pwa:** Refresh the Apple home screen icon URL ([3a9a064](https://github.com/Ripwords/BambuDeck/commit/3a9a064))
-
-### ❤️ Contributors
-
-- JJ <teohjjteoh@gmail.com>
-
 ## v0.3.1
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.3.0...v0.3.1)
