@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS node-toolchain
+FROM node:26-bookworm-slim AS node-toolchain
 FROM oven/bun:1.4.2 AS build
 COPY --from=node-toolchain /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
