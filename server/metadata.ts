@@ -5,8 +5,8 @@ import { createWriteStream } from "node:fs";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { FileError, ftp, remotePath } from "./files";
+import { join, posix } from "node:path";
+import { FileError, ftp, remotePath, withFTP } from "./files";
 import type { Credentials } from "./store";
 
 type Values = Record<string, unknown>;
@@ -181,6 +181,59 @@ export async function parse3mf(
     zip.close();
   }
 }
+export async function resolvePrintFile(
+  credentials: Credentials,
+  print: Values,
+): Promise<string | undefined> {
+  const names = [print.gcode_file, print.subtask_name]
+    .filter(
+      (value): value is string =>
+        typeof value === "string" &&
+        value.length > 0 &&
+        !/^\/?Metadata\//i.test(value),
+    )
+    .flatMap((value) => {
+      const path = value
+        .replace(/^(?:file|ftp|ftps):\/\/[^/]*/i, "")
+        .replace(/^\/?(?:sdcard|mnt\/sdcard)\//, "/");
+      try {
+        return [
+          path,
+          decodeURIComponent(path),
+          decodeURIComponent(path.replace(/\+/g, " ")),
+        ];
+      } catch {
+        return [path];
+      }
+    });
+  if (!names.length) return;
+  const stem = (name: string) =>
+    posix.basename(name).replace(/(?:\.gcode)?\.3mf$|\.gcode$/i, "");
+  return withFTP(credentials, async (client) => {
+    for (const name of new Set(names.filter((name) => /\.3mf$/i.test(name)))) {
+      const path = remotePath(name, false);
+      try {
+        await client.size(path);
+        return path;
+      } catch {}
+    }
+    const matches: string[] = [];
+    for (const directory of ["/", "/cache"]) {
+      try {
+        for (const file of await client.list(directory)) {
+          if (
+            file.isFile &&
+            /\.3mf$/i.test(file.name) &&
+            names.some((name) => stem(name) === stem(file.name))
+          ) {
+            matches.push(posix.join(directory, file.name));
+          }
+        }
+      } catch {}
+    }
+    return matches.length === 1 ? matches[0] : undefined;
+  });
+}
 export async function loadMetadata(
   credentials: Credentials,
   file: string,
@@ -272,7 +325,8 @@ export function publicMetadata(metadata: Metadata) {
 let profileCache: { until: number; values: Values[] } | undefined;
 export async function filamentProfiles(query: string) {
   if (!profileCache || profileCache.until < Date.now()) {
-    const root = process.env.BAMBUDECK_FILAMENT_DIR || "/data/filament-profiles";
+    const root =
+      process.env.BAMBUDECK_FILAMENT_DIR || "/data/filament-profiles";
     const documents = new Map<string, Values>();
     let count = 0;
     const visit = async (directory: string, depth: number): Promise<void> => {

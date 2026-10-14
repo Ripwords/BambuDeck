@@ -14,6 +14,7 @@ import {
   loadMetadata,
   publicMetadata,
   filamentProfiles,
+  resolvePrintFile,
   type Metadata,
 } from "./metadata";
 import {
@@ -35,6 +36,9 @@ interface Session {
   client: PrinterClient;
   profile: Printer;
   metadata?: Metadata;
+  printMetadata?: Metadata;
+  printJob?: string;
+  printMetadataLoading?: boolean;
   metadataLoading?: { path: string; work: Promise<Metadata> };
   metadataRetry?: number;
   uploading?: boolean;
@@ -54,7 +58,9 @@ export function engineReady() {
 function status(session: Session) {
   return {
     ...session.client.status(),
-    metadata: session.metadata ? publicMetadata(session.metadata) : null,
+    metadata: session.printMetadata
+      ? publicMetadata(session.printMetadata)
+      : null,
     upload_status: session.upload,
   };
 }
@@ -63,6 +69,7 @@ function emit(session: Session) {
   for (const listener of session.listeners) listener(value);
 }
 async function metadataFor(session: Session, path: string): Promise<Metadata> {
+  if (session.printMetadata?.filename === path) return session.printMetadata;
   if (session.metadata?.filename === path) return session.metadata;
   if (session.metadataLoading) {
     if (session.metadataLoading.path === path)
@@ -116,31 +123,46 @@ export function connect(profile: Printer): Promise<Session> {
         streams: new Set(),
         unsubscribe: () => {},
       };
-      session.unsubscribe = client.subscribe((value) => {
-        emit(session);
+      const update = (value: Record<string, unknown>) => {
         const print = value.print as Record<string, unknown> | undefined;
-        const filename = [print?.gcode_file, print?.subtask_name].find(
-          (path) => typeof path === "string" && /\.3mf$/i.test(path),
-        );
-        if (
-          typeof filename === "string" &&
-          !session.metadataLoading &&
-          (session.metadataRetry || 0) < Date.now()
-        ) {
-          let path: string;
-          try {
-            path = remotePath(filename, false);
-          } catch {
-            return;
-          }
-          if (session.metadata?.filename !== path)
-            void metadataFor(session, path)
-              .then(() => emit(session))
-              .catch(() => {
-                session.metadataRetry = Date.now() + 60000;
-              });
+        const job = JSON.stringify([
+          print?.gcode_file,
+          print?.subtask_name,
+          print?.task_id,
+          print?.subtask_id,
+        ]);
+        if (session.printJob !== job) {
+          session.printJob = job;
+          session.printMetadata = undefined;
+          session.metadataRetry = 0;
         }
-      });
+        emit(session);
+        if (
+          !print ||
+          session.printMetadata ||
+          session.printMetadataLoading ||
+          (session.metadataRetry || 0) > Date.now()
+        )
+          return;
+        session.printMetadataLoading = true;
+        void resolvePrintFile(profile, print)
+          .then(async (path) => {
+            if (!path) return;
+            const metadata = await metadataFor(session, path);
+            if (session.printJob === job) {
+              session.printMetadata = metadata;
+              emit(session);
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            session.printMetadataLoading = false;
+            if (session.printJob === job)
+              session.metadataRetry = Date.now() + 60000;
+          });
+      };
+      session.unsubscribe = client.subscribe(update);
+      update(client.status());
       clients.set(profile.id, session);
       attachHomeAssistant(profile, client);
       return session;
@@ -425,7 +447,8 @@ export async function proxy(
       const image =
         session.metadata.thumbnails.get(thumbKey) ||
         session.metadata.thumbnails.get(`Metadata/plate_${plate}${size}.png`) ||
-        session.metadata.thumbnails.get(`Metadata/plate_${plate}.png`);
+        session.metadata.thumbnails.get(`Metadata/plate_${plate}.png`) ||
+        session.metadata.thumbnails.get(`Metadata/plate_${plate}_small.png`);
       if (!image)
         throw new ApiError(
           404,

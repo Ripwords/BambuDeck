@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Wifi,
   Moon,
+  Monitor,
   Sun,
   LogOut,
   ShieldCheck,
@@ -57,8 +58,43 @@ const profiles = ref<Profile[]>([]),
   tab = ref("Overview"),
   connected = ref(false),
   connecting = ref(false),
-  status = reactive<Record<string, any>>({}),
-  dark = ref(localStorage.getItem("theme") === "dark");
+  status = reactive<Record<string, any>>({});
+type Theme = "system" | "light" | "dark";
+const savedTheme = localStorage.getItem("theme");
+const theme = ref<Theme>(
+  savedTheme === "light" || savedTheme === "dark" ? savedTheme : "system",
+);
+const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+const systemDark = ref(colorScheme.matches);
+const dark = computed(
+  () =>
+    theme.value === "dark" || (theme.value === "system" && systemDark.value),
+);
+const themeLabel = computed(
+  () =>
+    `Theme: ${theme.value}. Switch to ${theme.value === "system" ? "light" : theme.value === "light" ? "dark" : "system"} mode`,
+);
+function cycleTheme() {
+  theme.value =
+    theme.value === "system"
+      ? "light"
+      : theme.value === "light"
+        ? "dark"
+        : "system";
+}
+function syncSystemTheme(event: MediaQueryListEvent) {
+  systemDark.value = event.matches;
+}
+colorScheme.addEventListener("change", syncSystemTheme);
+watch(theme, (value) => localStorage.setItem("theme", value));
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+function showNotice(message: string) {
+  clearTimeout(noticeTimer);
+  notice.value = message;
+  noticeTimer = setTimeout(() => {
+    notice.value = "";
+  }, 4000);
+}
 const profile = computed(() =>
     profiles.value.find((p) => p.id === selected.value),
   ),
@@ -67,10 +103,85 @@ const profile = computed(() =>
   ),
   p = computed(() => status.print || {}),
   caps = computed(() => status.capabilities || {});
+const previewFailed = ref("");
+const printPreview = computed(() => {
+  const metadata = status.metadata;
+  if (
+    !connected.value ||
+    !metadata?.filename ||
+    !Array.isArray(metadata.plates)
+  )
+    return "";
+  const plateId = String(p.value.gcode_file || "").match(
+    /plate_(\d+)\.gcode/i,
+  )?.[1];
+  const plate =
+    metadata.plates.find(
+      (item: { id: number | string }) => String(item.id) === plateId,
+    ) || metadata.plates[0];
+  if (!plate) return "";
+  const query = new URLSearchParams({
+    file: metadata.filename,
+    plate: String(plate.id ?? 1),
+    size: "large",
+  });
+  if (plate.thumbnail) query.set("key", plate.thumbnail);
+  return `${base.value}/thumbnail?${query}`;
+});
+watch(printPreview, () => {
+  previewFailed.value = "";
+});
 const modal = ref(""),
   editing = ref(""),
   printerForm = reactive({ name: "", host: "", serial: "", code: "" });
-const files = ref<any[]>([]),
+type PrinterFile = {
+  Name: string;
+  Size: number;
+  Type: "dir" | "file";
+  Modified?: string;
+};
+type FileSort = "Name" | "Size" | "Modified";
+const fileSearch = ref("");
+const fileSort = ref<FileSort>("Name");
+const fileSortDescending = ref(false);
+const fileColumns = [
+  { key: "Name", label: "Name" },
+  { key: "Size", label: "Size" },
+  { key: "Modified", label: "Modified" },
+] as const;
+function modifiedTime(file: PrinterFile) {
+  const value = Date.parse(file.Modified || "");
+  return Number.isFinite(value) ? value : 0;
+}
+function modifiedLabel(file: PrinterFile) {
+  const value = modifiedTime(file);
+  return value ? new Date(value).toLocaleDateString() : "—";
+}
+function sortFiles(column: FileSort) {
+  fileSortDescending.value =
+    fileSort.value === column ? !fileSortDescending.value : false;
+  fileSort.value = column;
+}
+const visibleFiles = computed(() => {
+  const query = fileSearch.value.trim().toLocaleLowerCase();
+  return files.value
+    .filter((file) => file.Name.toLocaleLowerCase().includes(query))
+    .sort((a, b) => {
+      if (a.Type !== b.Type) return a.Type === "dir" ? -1 : 1;
+      const names = a.Name.localeCompare(b.Name, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+      const comparison =
+        fileSort.value === "Size"
+          ? a.Size - b.Size
+          : fileSort.value === "Modified"
+            ? modifiedTime(a) - modifiedTime(b)
+            : names;
+      return (comparison || names) * (fileSortDescending.value ? -1 : 1);
+    });
+});
+const files = ref<PrinterFile[]>([]),
   directory = ref("/"),
   filesLoading = ref(false),
   fileName = ref(""),
@@ -110,6 +221,28 @@ const temps = reactive<Record<string, number>>({
     chamber: 0,
   }),
   fanValues = reactive<Record<string, number>>({ part: 0, aux: 0, chamber: 0 });
+const fanFields: Record<string, string> = {
+  part: "cooling_fan_speed",
+  aux: "big_fan1_speed",
+  chamber: "big_fan2_speed",
+};
+const fanEdited = reactive<Record<string, boolean>>({});
+const chamberLight = computed(() => {
+  if (!connected.value || !Array.isArray(p.value.lights_report)) return null;
+  const mode = p.value.lights_report.find(
+    (light: { node: string; mode: string }) => light.node === "chamber_light",
+  )?.mode;
+  return mode === "on" || mode === "off" ? mode : null;
+});
+watch(
+  () => Object.keys(fanFields).map((fan) => fanPercent(fan)),
+  (speeds) => {
+    Object.keys(fanFields).forEach((fan, index) => {
+      const speed = speeds[index];
+      if (speed !== null && !fanEdited[fan]) fanValues[fan] = speed;
+    });
+  },
+);
 const nav = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Files", icon: FolderOpen },
@@ -162,6 +295,10 @@ async function connect() {
   const id = selected.value;
   const endpoint = base.value;
   events?.close();
+  for (const fan of Object.keys(fanFields)) {
+    fanEdited[fan] = false;
+    fanValues[fan] = 0;
+  }
   connected.value = false;
   for (const key of Object.keys(status)) delete status[key];
   if (!id) return;
@@ -202,6 +339,7 @@ watch(modal, (value) => {
 });
 watch(selected, () => {
   directory.value = "/";
+  fileSearch.value = "";
   files.value = [];
   void connect();
 });
@@ -209,7 +347,6 @@ watch(
   dark,
   (value) => {
     document.documentElement.dataset.theme = value ? "dark" : "light";
-    localStorage.setItem("theme", value ? "dark" : "light");
   },
   { immediate: true },
 );
@@ -221,7 +358,7 @@ watch(tab, async (value) => {
 async function control(cmd: string, values: Record<string, unknown> = {}) {
   await run(async () => {
     await api(base.value + "/control", form({ cmd, ...values }));
-    notice.value = "Command sent to printer";
+    showNotice("Command sent to printer");
   });
 }
 function editPrinter(item?: Profile) {
@@ -258,7 +395,7 @@ async function loadFiles() {
   filesLoading.value = true;
   try {
     files.value =
-      (await api<any[]>(
+      (await api<PrinterFile[]>(
         base.value + "/files?path=" + encodeURIComponent(directory.value),
       )) || [];
   } finally {
@@ -270,6 +407,8 @@ function filePath(name: string) {
 }
 async function openFolder(path: string) {
   directory.value = path;
+  fileSearch.value = "";
+  files.value = [];
   await run(loadFiles);
 }
 async function upload(event: Event) {
@@ -281,7 +420,7 @@ async function upload(event: Event) {
     data.set("path", directory.value);
     await api(base.value + "/upload", data);
     await loadFiles();
-    notice.value = "File uploaded";
+    showNotice("File uploaded");
   });
   (event.target as HTMLInputElement).value = "";
 }
@@ -325,7 +464,7 @@ async function startPrint() {
     await api(base.value + "/print", data);
     modal.value = "";
     tab.value = "Overview";
-    notice.value = "Print request sent";
+    showNotice("Print request sent");
   });
 }
 const flagLabels: Record<string, string> = {
@@ -340,19 +479,42 @@ const ams = computed(() => p.value.ams?.ams || []);
 function value(input: unknown, suffix = "") {
   return input === undefined || input === null ? "—" : `${input}${suffix}`;
 }
-function fanActual(fan: string) {
-  if (!connected.value) return "—";
-  const key = {
-    part: "cooling_fan_speed",
-    aux: "big_fan1_speed",
-    chamber: "big_fan2_speed",
-  }[fan];
-  const raw = key ? p.value[key] : undefined;
-  if (raw === undefined || raw === null || raw === "") return "—";
+function temperature(input: unknown) {
+  if (input === undefined || input === null || input === "") return "—";
+  const number = Number(input);
+  return Number.isFinite(number) ? `${Math.ceil(number)}°` : "—";
+}
+function fanPercent(fan: string): number | null {
+  if (!connected.value) return null;
+  const raw = p.value[fanFields[fan]];
+  if (raw === undefined || raw === null || raw === "") return null;
   const speed = Number(raw);
   return Number.isFinite(speed)
-    ? `${Math.round((Math.min(15, Math.max(0, speed)) / 15) * 100)}%`
-    : "—";
+    ? Math.round((Math.min(15, Math.max(0, speed)) / 15) * 100)
+    : null;
+}
+function fanActual(fan: string) {
+  const speed = fanPercent(fan);
+  return speed === null ? "—" : `${speed}%`;
+}
+async function setFan(fan: string) {
+  const endpoint = base.value;
+  const speed = fanValues[fan];
+  await run(async () => {
+    await api(endpoint + "/control", form({ cmd: "set_fan", fan, speed }));
+    if (endpoint === base.value && fanValues[fan] === speed)
+      fanEdited[fan] = false;
+    showNotice("Command sent to printer");
+  });
+}
+async function confirmPrintControl() {
+  const command = modal.value;
+  if (command !== "pause" && command !== "stop") return;
+  await run(async () => {
+    await api(base.value + "/control", form({ cmd: command }));
+    modal.value = "";
+    showNotice("Command sent to printer");
+  });
 }
 function size(bytes: number) {
   return bytes > 1048576
@@ -367,6 +529,8 @@ onMounted(async () => {
   auth.ready = true;
 });
 onUnmounted(() => {
+  clearTimeout(noticeTimer);
+  colorScheme.removeEventListener("change", syncSystemTheme);
   connectionEpoch++;
   events?.close();
 });
@@ -434,10 +598,14 @@ onUnmounted(() => {
         <div class="sidebar-actions">
           <button
             class="icon-button"
-            :aria-label="dark ? 'Use light theme' : 'Use dark theme'"
-            @click="dark = !dark"
+            :aria-label="themeLabel"
+            :title="themeLabel"
+            @click="cycleTheme"
           >
-            <Sun v-if="dark" :size="18" /><Moon v-else :size="18" /></button
+            <Monitor v-if="theme === 'system'" :size="18" /><Sun
+              v-else-if="theme === 'light'"
+              :size="18"
+            /><Moon v-else :size="18" /></button
           ><button class="text-button" @click="logout">
             <LogOut :size="16" />Sign out
           </button>
@@ -466,7 +634,9 @@ onUnmounted(() => {
           <template v-if="profiles.length">
             <span class="connection" role="status">
               <i :class="{ online: connected }" />
-              {{ connecting ? "Connecting" : connected ? "Connected" : "Offline" }}
+              {{
+                connecting ? "Connecting" : connected ? "Connected" : "Offline"
+              }}
             </span>
             <button
               class="icon-button"
@@ -479,10 +649,14 @@ onUnmounted(() => {
           </template>
           <button
             class="icon-button"
-            :aria-label="dark ? 'Use light theme' : 'Use dark theme'"
-            @click="dark = !dark"
+            :aria-label="themeLabel"
+            :title="themeLabel"
+            @click="cycleTheme"
           >
-            <Sun v-if="dark" :size="18" /><Moon v-else :size="18" />
+            <Monitor v-if="theme === 'system'" :size="18" /><Sun
+              v-else-if="theme === 'light'"
+              :size="18"
+            /><Moon v-else :size="18" />
           </button>
         </div>
       </header>
@@ -511,7 +685,7 @@ onUnmounted(() => {
           <AlertCircle :size="19" /><span>{{ error }}</span
           ><button class="text-button" @click="error = ''">Dismiss</button>
         </div>
-        <div v-if="notice" class="banner success" role="status">
+        <div v-if="notice" class="toast" role="status" aria-live="polite">
           <span>{{ notice }}</span
           ><button class="text-button" @click="notice = ''">Dismiss</button>
         </div>
@@ -540,8 +714,21 @@ onUnmounted(() => {
                 <span class="badge">{{ p.gcode_state || "No signal" }}</span>
               </div>
               <div class="job-body">
-                <div class="job-object">
-                  <Box :size="45" :stroke-width="1.2" />
+                <div
+                  class="job-object"
+                  :class="{
+                    'has-preview':
+                      printPreview && previewFailed !== printPreview,
+                  }"
+                >
+                  <img
+                    v-if="printPreview && previewFailed !== printPreview"
+                    :key="printPreview"
+                    :src="printPreview"
+                    alt="Current print preview"
+                    @error="previewFailed = printPreview"
+                  />
+                  <Box v-else :size="45" :stroke-width="1.2" />
                 </div>
                 <h3>
                   {{ p.subtask_name || p.gcode_file || "No active print" }}
@@ -577,7 +764,7 @@ onUnmounted(() => {
                     :disabled="
                       !connected || busy || p.gcode_state !== 'RUNNING'
                     "
-                    @click="control('pause')"
+                    @click="modal = 'pause'"
                   >
                     <Pause :size="16" />Pause</button
                   ><button
@@ -640,9 +827,9 @@ onUnmounted(() => {
                 <div>
                   <strong class="capitalize">{{ target }}</strong
                   ><small
-                    >{{ value(p[target + "_temper"], "°") }}
+                    >{{ temperature(p[target + "_temper"]) }}
                     <span
-                      >/ {{ value(p[target + "_target_temper"], "°") }}</span
+                      >/ {{ temperature(p[target + "_target_temper"]) }}</span
                     ></small
                   >
                 </div>
@@ -682,20 +869,19 @@ onUnmounted(() => {
               <form
                 v-for="fan in fanTargets"
                 class="fan-row"
-                @submit.prevent="
-                  control('set_fan', { fan, speed: fanValues[fan] })
-                "
+                @submit.prevent="setFan(fan)"
               >
                 <label :for="'fan-' + fan" class="fan-label"
                   ><span class="capitalize">{{ fan }} fan</span
                   ><small>Actual {{ fanActual(fan) }}</small></label
                 ><input
                   :id="'fan-' + fan"
-                  v-model="fanValues[fan]"
+                  v-model.number="fanValues[fan]"
+                  @input="fanEdited[fan] = true"
                   type="range"
                   min="0"
                   max="100"
-                  step="10"
+                  step="1"
                   :disabled="!connected"
                 /><span class="fan-target"
                   ><small>Target</small>{{ fanValues[fan] }}%</span
@@ -727,10 +913,21 @@ onUnmounted(() => {
           </div>
           <section class="quick-controls">
             <div><Lightbulb :size="19" /><strong>Chamber light</strong></div>
-            <button :disabled="!connected || busy" @click="control('light_on')">
+            <button
+              :class="{ primary: chamberLight === 'on' }"
+              :aria-pressed="
+                chamberLight === null ? undefined : chamberLight === 'on'
+              "
+              :disabled="!connected || busy"
+              @click="control('light_on')"
+            >
               On</button
             ><button
               :disabled="!connected || busy"
+              :class="{ primary: chamberLight === 'off' }"
+              :aria-pressed="
+                chamberLight === null ? undefined : chamberLight === 'off'
+              "
               @click="control('light_off')"
             >
               Off</button
@@ -789,6 +986,14 @@ onUnmounted(() => {
                 >Download folder</a
               >
             </div>
+            <div class="file-search">
+              <input
+                v-model="fileSearch"
+                type="search"
+                aria-label="Search files in this folder"
+                placeholder="Search files…"
+              />
+            </div>
             <p v-if="filesLoading" class="empty-inline">
               Loading printer storage…
             </p>
@@ -799,63 +1004,111 @@ onUnmounted(() => {
                   : "Connect your printer to browse its storage."
               }}
             </p>
-            <div v-for="file in files" :key="file.Name" class="file-row">
-              <FolderOpen v-if="file.Type === 'dir'" :size="23" /><Box
-                v-else
-                :size="23"
-              />
-              <div class="file-info">
-                <button
-                  v-if="file.Type === 'dir'"
-                  class="file-name"
-                  @click="openFolder(filePath(file.Name) + '/')"
+            <p v-else-if="!visibleFiles.length" class="empty-inline">
+              No matching files.
+            </p>
+            <div
+              v-if="!filesLoading && files.length"
+              role="table"
+              aria-label="Printer files"
+              class="file-table"
+            >
+              <div role="row" class="file-columns">
+                <div
+                  v-for="column in fileColumns"
+                  :key="column.key"
+                  role="columnheader"
+                  :aria-sort="
+                    fileSort === column.key
+                      ? fileSortDescending
+                        ? 'descending'
+                        : 'ascending'
+                      : 'none'
+                  "
                 >
-                  {{ file.Name }}</button
-                ><strong v-else>{{ file.Name }}</strong
-                ><small>{{
-                  file.Type === "dir" ? "Folder" : size(file.Size || 0)
-                }}</small>
+                  <button @click="sortFiles(column.key)">
+                    {{ column.label
+                    }}<span aria-hidden="true">{{
+                      fileSort === column.key
+                        ? fileSortDescending
+                          ? "↓"
+                          : "↑"
+                        : "↕"
+                    }}</span>
+                  </button>
+                </div>
+                <div role="columnheader" class="sr-only">Actions</div>
               </div>
-              <div class="file-actions">
-                <button
-                  v-if="/\.(3mf|gcode)$/i.test(file.Name)"
-                  :disabled="!connected || busy"
-                  @click="preparePrint(filePath(file.Name))"
+              <div
+                v-for="file in visibleFiles"
+                :key="file.Name"
+                class="file-row"
+                role="row"
+              >
+                <div class="file-info" role="cell">
+                  <FolderOpen v-if="file.Type === 'dir'" :size="20" /><Box
+                    v-else
+                    :size="20"
+                  />
+                  <button
+                    v-if="file.Type === 'dir'"
+                    class="file-name"
+                    @click="openFolder(filePath(file.Name) + '/')"
+                  >
+                    {{ file.Name }}</button
+                  ><strong v-else>{{ file.Name }}</strong>
+                </div>
+                <div class="file-size" role="cell">
+                  {{ file.Type === "dir" ? "Folder" : size(file.Size || 0) }}
+                </div>
+                <div
+                  class="file-modified"
+                  role="cell"
+                  :title="file.Modified || undefined"
                 >
-                  <Play :size="15" /><span>Print</span></button
-                ><a
-                  v-if="file.Type !== 'dir'"
-                  class="icon-button"
-                  :href="
-                    base +
-                    '/download?path=' +
-                    encodeURIComponent(filePath(file.Name))
-                  "
-                  :aria-label="'Download ' + file.Name"
-                  download
-                  ><Download :size="17" /></a
-                ><button
-                  class="icon-button"
-                  :disabled="!connected || busy"
-                  :aria-label="'Rename ' + file.Name"
-                  @click="
-                    fileTarget = filePath(file.Name);
-                    fileName = file.Name;
-                    modal = 'rename';
-                  "
-                >
-                  <Pencil :size="16" /></button
-                ><button
-                  class="icon-button"
-                  :disabled="!connected || busy"
-                  :aria-label="'Delete ' + file.Name"
-                  @click="
-                    fileTarget = filePath(file.Name);
-                    modal = 'delete';
-                  "
-                >
-                  <Trash2 :size="16" />
-                </button>
+                  {{ modifiedLabel(file) }}
+                </div>
+                <div class="file-actions" role="cell">
+                  <button
+                    v-if="/\.(3mf|gcode)$/i.test(file.Name)"
+                    :disabled="!connected || busy"
+                    @click="preparePrint(filePath(file.Name))"
+                  >
+                    <Play :size="15" /><span>Print</span></button
+                  ><a
+                    v-if="file.Type !== 'dir'"
+                    class="icon-button"
+                    :href="
+                      base +
+                      '/download?path=' +
+                      encodeURIComponent(filePath(file.Name))
+                    "
+                    :aria-label="'Download ' + file.Name"
+                    download
+                    ><Download :size="17" /></a
+                  ><button
+                    class="icon-button"
+                    :disabled="!connected || busy"
+                    :aria-label="'Rename ' + file.Name"
+                    @click="
+                      fileTarget = filePath(file.Name);
+                      fileName = file.Name;
+                      modal = 'rename';
+                    "
+                  >
+                    <Pencil :size="16" /></button
+                  ><button
+                    class="icon-button"
+                    :disabled="!connected || busy"
+                    :aria-label="'Delete ' + file.Name"
+                    @click="
+                      fileTarget = filePath(file.Name);
+                      modal = 'delete';
+                    "
+                  >
+                    <Trash2 :size="16" />
+                  </button>
+                </div>
               </div>
             </div>
             <div v-if="status.upload_status?.uploading" class="upload-progress">
@@ -873,7 +1126,7 @@ onUnmounted(() => {
               @click="
                 run(async () => {
                   await api(base + '/filament', form({ action: 'unload' }));
-                  notice = 'Unload request sent';
+                  showNotice('Unload request sent');
                 })
               "
             >
@@ -924,7 +1177,7 @@ onUnmounted(() => {
                           target: Number(unit.id) * 4 + Number(tray.id),
                         }),
                       );
-                      notice = 'Load request sent';
+                      showNotice('Load request sent');
                     })
                   "
                 >
@@ -951,7 +1204,7 @@ onUnmounted(() => {
                     base + '/filament',
                     form({ action: 'load', target: 254 }),
                   );
-                  notice = 'External spool load requested';
+                  showNotice('External spool load requested');
                 })
               "
             >
@@ -964,7 +1217,7 @@ onUnmounted(() => {
             mode="filament"
             :status="status"
             @error="error = $event"
-            @notice="notice = $event"
+            @notice="showNotice"
         /></template>
         <template v-else-if="tab === 'Settings'"
           ><section class="panel">
@@ -999,7 +1252,7 @@ onUnmounted(() => {
                 run(async () => {
                   await api('/api/settings', settings, 'PUT');
                   settings.mqttPassword = '';
-                  notice = 'MQTT settings saved. Reconnecting printer…';
+                  showNotice('MQTT settings saved. Reconnecting printer…');
                   await connect();
                 })
               "
@@ -1040,7 +1293,7 @@ onUnmounted(() => {
             mode="hardware"
             :status="status"
             @error="error = $event"
-            @notice="notice = $event"
+            @notice="showNotice"
           />
           <section class="session-panel">
             <div><h2>Your session</h2></div>
@@ -1068,13 +1321,15 @@ onUnmounted(() => {
           : 'Add your printer'
         : modal === 'print'
           ? 'Ready to print?'
-          : modal === 'stop'
-            ? 'Stop this print?'
-            : modal === 'delete'
-              ? 'Delete from printer?'
-              : modal === 'mkdir'
-                ? 'New folder'
-                : 'Rename file'
+          : modal === 'pause'
+            ? 'Pause this print?'
+            : modal === 'stop'
+              ? 'Stop this print?'
+              : modal === 'delete'
+                ? 'Delete from printer?'
+                : modal === 'mkdir'
+                  ? 'New folder'
+                  : 'Rename file'
     "
     @close="modal = ''"
   >
@@ -1203,28 +1458,36 @@ onUnmounted(() => {
     <div v-else>
       <p>
         {{
-          modal === "stop"
-            ? "The current print will end and cannot be resumed."
-            : modal === "remove-printer"
-              ? "Remove this saved printer and its credentials?"
-              : `Permanently delete ${fileTarget}?`
+          modal === "pause"
+            ? "Pause the current print? You can resume it later."
+            : modal === "stop"
+              ? "The current print will end and cannot be resumed."
+              : modal === "remove-printer"
+                ? "Remove this saved printer and its credentials?"
+                : `Permanently delete ${fileTarget}?`
         }}
       </p>
       <p v-if="error" class="error">{{ error }}</p>
       <div class="modal-actions">
         <button @click="modal = ''">Cancel</button
         ><button
-          class="danger"
-          :disabled="busy"
+          :class="modal === 'pause' ? 'primary' : 'danger'"
+          :disabled="busy || (['pause', 'stop'].includes(modal) && !connected)"
           @click="
-            modal === 'stop'
-              ? control('stop').then(() => (modal = ''))
+            ['pause', 'stop'].includes(modal)
+              ? confirmPrintControl()
               : modal === 'remove-printer'
                 ? removePrinter()
                 : fileAction()
           "
         >
-          {{ modal === "stop" ? "Stop print" : "Delete" }}
+          {{
+            modal === "pause"
+              ? "Pause print"
+              : modal === "stop"
+                ? "Stop print"
+                : "Delete"
+          }}
         </button>
       </div>
     </div>

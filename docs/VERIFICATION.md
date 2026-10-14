@@ -13,6 +13,10 @@
 - Browser review covered overview, files, filament and settings at widths 320, 375, 414, 768 and 1440 pixels, without horizontal overflow. The final shared header was checked separately at all five widths.
 - Browser setup, printer creation, offline error handling, page navigation, and credential masking were inspected.
 
+## Version 0.2.0 browser checks
+
+Simulated printer telemetry was used to inspect fan synchronization without overwriting edited values, Pause/Stop confirmation and cancellation, rounded temperature displays, chamber-light state, four-second toast expiry, theme persistence and system appearance changes, and file search/sorting at mobile and desktop widths. These checks did not send hardware commands.
+
 ## Not verified against hardware
 
 No physical printer or Home Assistant broker was supplied. MQTT command acceptance, FTPS compatibility, live camera delivery, and Home Assistant discovery have been implemented and reviewed but not exercised against a real printer.
