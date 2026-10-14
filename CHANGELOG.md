@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.1
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.3.0...v0.3.1)
+
+### 🩹 Fixes
+
+- **pwa:** Add mobile Safari favicon fallbacks ([3637d55](https://github.com/Ripwords/BambuDeck/commit/3637d55))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.3.0
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.2.0...v0.3.0)
