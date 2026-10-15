@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.4.0
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.3.1...v0.4.0)
+
+### 🚀 Enhancements
+
+- **discovery:** Find LAN printers and recover changed addresses ([aec0712](https://github.com/Ripwords/BambuDeck/commit/aec0712))
+
+### 🩹 Fixes
+
+- **http:** Preserve static asset size in HEAD responses ([16b70c9](https://github.com/Ripwords/BambuDeck/commit/16b70c9))
+- **pwa:** Refresh the Apple home screen icon URL ([3a9a064](https://github.com/Ripwords/BambuDeck/commit/3a9a064))
+
+### 🏡 Chore
+
+- **release:** V0.3.2 ([35ff0e6](https://github.com/Ripwords/BambuDeck/commit/35ff0e6))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.3.1
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.3.0...v0.3.1)
