@@ -1,0 +1,6 @@
+services:
+  dashboard:
+    network_mode: host
+    ports: !reset []
+    environment:
+      PORT: ${DASHBOARD_PORT:-3000}

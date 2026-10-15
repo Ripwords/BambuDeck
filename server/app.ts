@@ -6,6 +6,7 @@ import { authRoutes, requireAuth } from "./auth/routes";
 import { printerRoutes } from "./printers/routes";
 import { settingsRoutes } from "./settings/routes";
 import { engineReady } from "./engine";
+import { discoverPrinters } from "./discovery";
 export const app = new Elysia({
   serve: { idleTimeout: 0, maxRequestBodySize: 2 * 1024 * 1024 * 1024 },
 })
@@ -22,6 +23,9 @@ export const app = new Elysia({
     if (path !== "/api/health" && !path.startsWith("/api/auth/")) await requireAuth(request);
   })
   .get("/api/health", () => json({ ok: true, engineReady: engineReady() }))
+  .post("/api/discovery/scan", async () => json({ printers: await discoverPrinters() }), {
+    parse: "none",
+  })
   .use(authRoutes)
   .use(printerRoutes)
   .use(settingsRoutes)

@@ -176,6 +176,7 @@ export async function proxy(
     }
   }
   const session = await connect(profile);
+  profile = session.profile;
   const query = new URL(request.url).searchParams;
   try {
     if (endpoint === "preview")

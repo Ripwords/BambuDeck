@@ -41,7 +41,7 @@ export const printerRoutes = new Elysia({ prefix: "/api/printers" })
   .post(
     "/:id/connect",
     async ({ params }) => {
-      await connect(requirePrinter(params.id));
+      await connect(requirePrinter(params.id), true);
       return json({ ok: true });
     },
     { parse: "none" },

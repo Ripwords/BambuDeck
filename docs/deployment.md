@@ -1,5 +1,21 @@
 # Deployment & releases
 
+## Linux host networking for discovery
+
+The default Compose deployment keeps bridge networking. For LAN discovery on Linux, add the host-network override with Docker Compose 2.24 or newer:
+
+```sh
+docker compose -f compose.production.yaml -f compose.host.yaml up -d
+```
+
+For a local source build, use `compose.yaml` instead of `compose.production.yaml` and add `--build`. Keep using the same Compose project and data volume when changing networking.
+
+Host networking removes the port mapping and binds the application directly to `DASHBOARD_PORT` (3000 by default). Keep `APP_ORIGIN` aligned with the browser address. The host firewall must allow the dashboard TCP port and printer announcements on UDP 1990/2021, including multicast group `239.255.255.250`. No additional container capabilities are required.
+
+This override is intended for native Linux Docker. Docker Desktop, routed VLANs, guest Wi-Fi, and access-point isolation can prevent announcements from reaching the backend. Run Bun directly on a host on the printer LAN or configure an explicit network relay if multicast is unavailable. Publishing a UDP port through a Docker bridge alone does not guarantee discovery.
+
+The existing bridge deployment remains supported; configure the printer IP manually when needed. Discovery failure does not erase a saved profile.
+
 ## GitHub setup
 
 The repository is `Ripwords/BambuDeck`. Its GitHub Actions workflows validate changes, publish Docker images, and deploy documentation to `https://ripwords.github.io/BambuDeck/`.

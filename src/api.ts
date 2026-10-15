@@ -2,6 +2,7 @@ export async function api<T = any>(
   url: string,
   body?: unknown,
   method = body === undefined ? "GET" : "POST",
+  signal?: AbortSignal,
 ): Promise<T> {
   const headers: Record<string, string> = {};
   if (method !== "GET") headers["X-Requested-With"] = "BambuDeck";
@@ -12,6 +13,7 @@ export async function api<T = any>(
     headers,
     credentials: "same-origin",
     cache: "no-store",
+    signal,
     ...(body === undefined ? {} : { body: native ? body : JSON.stringify(body) }),
   });
   if (!response.ok) {

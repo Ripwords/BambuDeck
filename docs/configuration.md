@@ -19,6 +19,18 @@ BAMBUDECK_VERSION=latest
 
 When supplying an encryption key, preserve exactly the same value across deployments. Changing or losing it prevents decryption of saved credentials. Keep environment files out of Git.
 
+## Printer discovery
+
+Use **Find printer** in the printer editor to listen for LAN announcements. Selecting a result fills the address and serial number; enter the LAN access code and save the profile yourself. Discovery does not retrieve access codes.
+
+When a saved connection fails, BambuDeck makes one discovery attempt for that serial and retries if its address changed. An established connection gets a 15-second reconnect grace period before one recovery attempt per outage. The new address is saved only after the replacement MQTT connection succeeds; other profile fields stay unchanged.
+
+`DISCOVERY_ENABLED` defaults to `true`; set it to `false` to disable discovery. `DISCOVERY_TIMEOUT_MS` defaults to `15000` and accepts 1000–60000 milliseconds. A targeted recovery scan returns as soon as the saved serial number is found.
+
+The authenticated `POST /api/discovery/scan` endpoint accepts an empty JSON object and returns `{ "printers": [{ "host": "…", "serial": "…", "model": "…" }] }`. It requires the same Origin and `X-Requested-With: BambuDeck` headers as other mutations. Empty results mean no announcement arrived during the window, not that no printer exists.
+
+Discovery listens on UDP 1990 and 2021 and can use either port when another application occupies one. The server must receive the printer’s LAN broadcast or multicast traffic. See [Linux host networking](./deployment.md#linux-host-networking-for-discovery) for Docker. Direct IP setup continues to work when discovery is unavailable.
+
 ## Storage and authentication
 
 SQLite stores encrypted printer addresses, serial numbers, LAN codes, and Home Assistant broker credentials using AES-256-GCM. The dashboard password uses Argon2. Better Auth manages the single administrator and seven-day sessions using HttpOnly cookies. Its authentication tables are not encrypted; printer and broker credentials remain encrypted. Existing passwords migrate automatically, while existing browser sessions require signing in again. Public registration is disabled.

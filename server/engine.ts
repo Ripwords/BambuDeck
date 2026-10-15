@@ -1,6 +1,7 @@
 import { invalidatePreview } from "./preview";
 import { PrinterClient } from "./printer";
-import { printers, settings, type Printer } from "./store";
+import { printer, printers, savePrinter, settings, type Printer } from "./store";
+import { discoverPrinters, stopDiscovery } from "./discovery";
 import { loadMetadata, publicMetadata, resolvePrintFile, type Metadata } from "./metadata";
 import {
   startHomeAssistant,
@@ -23,6 +24,7 @@ export interface Session {
   listeners: Set<(value: Record<string, unknown>) => void>;
   streams: Set<() => void>;
   unsubscribe: () => void;
+  recoveryTimer?: ReturnType<typeof setTimeout>;
 }
 const clients = new Map<string, Session>();
 const connecting = new Map<string, Promise<Session>>();
@@ -61,26 +63,53 @@ export async function metadataFor(session: Session, path: string): Promise<Metad
   session.metadataLoading = { path, work };
   return work;
 }
-export function connect(profile: Printer): Promise<Session> {
+export function connect(profile: Printer, reconnect = false): Promise<Session> {
   if (!running)
     return Promise.reject(
       new ApiError(503, "Printer connections are restarting. Try again shortly."),
     );
   const current = clients.get(profile.id);
-  if (current) return Promise.resolve(current);
+  if (current && (!reconnect || current.client.connected)) return Promise.resolve(current);
   const pending = connecting.get(profile.id);
   if (pending) return pending;
   const epoch = generation;
-  const client = new PrinterClient(profile);
+  let client = new PrinterClient(profile);
   let work!: Promise<Session>;
   work = (async () => {
     try {
-      await client.connect();
+      try {
+        await client.connect();
+      } catch (error) {
+        await client.close();
+        if (epoch !== generation || connecting.get(profile.id) !== work) throw error;
+        const discovered = await discoverPrinters(profile.serial).catch(() => []);
+        const found = discovered.find((value) => value.serial === profile.serial);
+        if (!found || found.host === profile.host) throw error;
+        if (epoch !== generation || connecting.get(profile.id) !== work) throw error;
+        const previous = profile;
+        profile = { ...profile, host: found.host };
+        client = new PrinterClient(profile);
+        await client.connect();
+        if (epoch !== generation || connecting.get(profile.id) !== work) throw error;
+        const saved = printer(profile.id);
+        if (
+          !saved ||
+          saved.host !== previous.host ||
+          saved.serial !== previous.serial ||
+          saved.code !== previous.code ||
+          saved.name !== previous.name
+        )
+          throw new ApiError(
+            409,
+            "Printer profile changed while connecting. Reconnect to continue.",
+          );
+        savePrinter({ ...saved, host: found.host });
+      }
       if (epoch !== generation || connecting.get(profile.id) !== work) {
         await client.close();
         throw new ApiError(409, "Printer profile changed while connecting. Reconnect to continue.");
       }
-      const session: Session = {
+      const session: Session = current || {
         client,
         profile,
         upload: {},
@@ -88,7 +117,32 @@ export function connect(profile: Printer): Promise<Session> {
         streams: new Set(),
         unsubscribe: () => {},
       };
+      if (current) {
+        clearTimeout(current.recoveryTimer);
+        current.recoveryTimer = undefined;
+        current.unsubscribe();
+        void current.client.close().catch(() => {});
+        current.client = client;
+        current.profile = profile;
+      }
+      let wasConnected = client.connected;
       const update = (value: Record<string, unknown>) => {
+        if (client.connected) {
+          wasConnected = true;
+          clearTimeout(session.recoveryTimer);
+          session.recoveryTimer = undefined;
+        } else if (wasConnected && !session.recoveryTimer) {
+          wasConnected = false;
+          session.recoveryTimer = setTimeout(() => {
+            session.recoveryTimer = undefined;
+            if (clients.get(profile.id) !== session || client.connected || !running) return;
+            const saved = printer(profile.id);
+            if (!saved || generation !== epoch) return;
+            void connect(saved, true).catch(() =>
+              console.info("A saved printer is offline; reconnect from the dashboard."),
+            );
+          }, 15000);
+        }
         const print = value.print as Record<string, unknown> | undefined;
         const job = JSON.stringify([
           print?.gcode_file,
@@ -151,6 +205,7 @@ export async function forgetPrinter(id: string) {
   clients.delete(id);
   detachHomeAssistant(id, true);
   if (session) {
+    clearTimeout(session.recoveryTimer);
     for (const stop of session.streams) stop();
     session.unsubscribe();
     session.listeners.clear();
@@ -179,6 +234,7 @@ export function restartEngine(): Promise<void> {
 }
 export async function shutdownEngine() {
   await lifecycle;
+  stopDiscovery();
   running = false;
   generation++;
   connecting.clear();

@@ -13,6 +13,8 @@ services:
       NODE_ENV: production
       PORT: "3000"
       DATA_DIR: /data
+      DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-true}
+      DISCOVERY_TIMEOUT_MS: ${DISCOVERY_TIMEOUT_MS:-15000}
     security_opt:
       - no-new-privileges:true
     cap_drop:
