@@ -179,10 +179,23 @@ export async function proxy(
   profile = session.profile;
   const query = new URL(request.url).searchParams;
   try {
-    if (endpoint === "preview")
-      return json(
-        await preview(profile, session.client.status().print as Record<string, unknown>, query),
+    if (endpoint === "preview") {
+      const payload = await preview(
+        profile,
+        session.client.status().print as Record<string, unknown>,
+        query,
       );
+      const gzip = /\bgzip\b/i.test(request.headers.get("accept-encoding") || "");
+      return new Response(gzip ? Bun.gzipSync(payload) : payload, {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+          Vary: "Accept-Encoding",
+          ...(gzip ? { "Content-Encoding": "gzip" } : {}),
+        },
+      });
+    }
     if (endpoint === "status") return json(status(session));
     if (endpoint === "events") return events(request, session);
     if (endpoint === "camera") return camera(request, session);

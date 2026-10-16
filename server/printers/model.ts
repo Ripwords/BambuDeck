@@ -32,11 +32,4 @@ export const previewQuerySchema = z.object({
     .transform(Number)
     .pipe(z.number().int().min(1).max(10000))
     .optional(),
-  layer: z
-    .string()
-    .regex(/^\d+$/, "Invalid layer number.")
-    .transform(Number)
-    .pipe(z.number().int().min(1).max(Number.MAX_SAFE_INTEGER))
-    .optional(),
-  model: z.enum(["0", "1"]).optional(),
 });

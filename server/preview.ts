@@ -1,7 +1,7 @@
 import { parse } from "./validation";
 import { previewQuerySchema } from "./printers/model";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { open as openFile, mkdtemp, readFile, rm, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Transform, type Readable } from "node:stream";
@@ -10,15 +10,19 @@ import { open, type ZipFile, type Entry } from "yauzl";
 import { FileError, ftp, remotePath } from "./files";
 import { resolvePrintFile } from "./metadata";
 import type { Printer } from "./store";
+import {
+  TOOLPATH_ORIGIN,
+  TOOLPATH_SEGMENT_BUDGET,
+  TOOLPATH_VERSION,
+  dequantize,
+  encodeToolpathHeader,
+  quantize,
+  type Point,
+  type ToolpathHeader,
+  type ToolpathObject,
+} from "../shared/toolpath";
 
-type Point = [number, number, number];
-type Preview = {
-  directory: string;
-  layers: { z: number; count: number }[];
-  bounds: { min: Point; max: Point };
-  model: number[];
-  warnings: string[];
-};
+type Preview = { directory: string; payload: string };
 type CachedPreview = {
   expires: number;
   work: Promise<Preview>;
@@ -128,70 +132,223 @@ async function* lines(stream: Readable) {
   }
   if (pending) yield pending;
 }
+const CHUNK = 65536;
+const MAX_OBJECTS = 1024;
+const HULL_ROW = 10;
+const TOOLPATH_LIMIT = dequantize(65535);
+type ObjectShape = {
+  id: number;
+  index: number;
+  rows: Map<number, [number, number, number, number]>;
+  minZ: number;
+  maxZ: number;
+};
+class SegmentSpool {
+  readonly positions = new Uint16Array((CHUNK + 1024) * 6);
+  readonly objects = new Uint16Array(CHUNK + 1024);
+  pending = 0;
+  written = 0;
+  constructor(
+    readonly positionFile: FileHandle,
+    readonly objectFile: FileHandle,
+  ) {}
+  get count() {
+    return this.written + this.pending;
+  }
+  push(from: Point, to: Point, object: number) {
+    const base = this.pending * 6;
+    for (let axis = 0; axis < 3; axis++) {
+      this.positions[base + axis] = quantize(from[axis]!);
+      this.positions[base + 3 + axis] = quantize(to[axis]!);
+    }
+    this.objects[this.pending++] = object;
+  }
+  async drain(force = false) {
+    if (!this.pending || (!force && this.pending < CHUNK)) return;
+    await this.positionFile.write(
+      new Uint8Array(this.positions.buffer, 0, this.pending * 12),
+      0,
+      this.pending * 12,
+      this.written * 12,
+    );
+    await this.objectFile.write(
+      new Uint8Array(this.objects.buffer, 0, this.pending * 2),
+      0,
+      this.pending * 2,
+      this.written * 2,
+    );
+    this.written += this.pending;
+    this.pending = 0;
+  }
+  async reset() {
+    this.pending = 0;
+    this.written = 0;
+    await Promise.all([this.positionFile.truncate(0), this.objectFile.truncate(0)]);
+  }
+}
+function trackObject(shape: ObjectShape, point: Point) {
+  const row = Math.floor(quantize(point[1]) / HULL_ROW);
+  const extent = shape.rows.get(row);
+  if (!extent) shape.rows.set(row, [point[0], point[1], point[0], point[1]]);
+  else {
+    if (point[0] < extent[0]) {
+      extent[0] = point[0];
+      extent[1] = point[1];
+    }
+    if (point[0] > extent[2]) {
+      extent[2] = point[0];
+      extent[3] = point[1];
+    }
+  }
+  shape.minZ = Math.min(shape.minZ, point[2]);
+  shape.maxZ = Math.max(shape.maxZ, point[2]);
+}
+const round = (value: number) => Math.round(value * 100) / 100;
+function convexHull(points: [number, number][]) {
+  const sorted = points.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (sorted.length < 3) return sorted;
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const chain = (list: [number, number][]) => {
+    const result: [number, number][] = [];
+    for (const point of list) {
+      while (result.length >= 2 && cross(result.at(-2)!, result.at(-1)!, point) <= 0) result.pop();
+      result.push(point);
+    }
+    result.pop();
+    return result;
+  };
+  return [...chain(sorted), ...chain([...sorted].reverse())];
+}
+function objectSummary(shape: ObjectShape): ToolpathObject {
+  const points: [number, number][] = [];
+  for (const [minX, minY, maxX, maxY] of shape.rows.values())
+    points.push([round(minX), round(minY)], [round(maxX), round(maxY)]);
+  return { id: shape.id, hull: convexHull(points), minZ: shape.minZ, maxZ: shape.maxZ };
+}
+function decimationStride(layerCounts: number[], total: number) {
+  const kept = (stride: number) =>
+    layerCounts.reduce((sum, count) => sum + Math.ceil(count / stride), 0);
+  let stride = Math.max(1, Math.ceil(total / TOOLPATH_SEGMENT_BUDGET));
+  while (kept(stride) > TOOLPATH_SEGMENT_BUDGET) stride++;
+  return stride;
+}
+async function copySegments(
+  source: FileHandle,
+  width: number,
+  layerCounts: number[],
+  stride: number,
+  target: FileHandle,
+  offset: number,
+) {
+  const total = layerCounts.reduce((sum, count) => sum + count, 0);
+  const input = Buffer.allocUnsafe(CHUNK * width);
+  const output = Buffer.allocUnsafe(CHUNK * width);
+  let layer = 0,
+    inLayer = 0,
+    read = 0;
+  while (read < total) {
+    const count = Math.min(CHUNK, total - read);
+    const { bytesRead } = await source.read(input, 0, count * width, read * width);
+    if (bytesRead !== count * width) throw new FileError(500, "Toolpath preview is incomplete.");
+    let kept = 0;
+    for (let index = 0; index < count; index++) {
+      while (inLayer >= layerCounts[layer]!) {
+        layer++;
+        inLayer = 0;
+      }
+      if (inLayer % stride === 0)
+        input.copy(output, kept++ * width, index * width, (index + 1) * width);
+      inLayer++;
+    }
+    await target.write(output, 0, kept * width, offset);
+    offset += kept * width;
+    read += count;
+  }
+  return offset;
+}
 export async function parseToolpath(
   path: string,
   plate: number,
   directory: string,
+  filename: string,
 ): Promise<Preview> {
+  const positionPath = join(directory, "positions.bin"),
+    objectPath = join(directory, "objects.bin");
   const source = await gcodeStream(path, plate);
-  const result: Preview = {
-    directory,
-    layers: [],
-    bounds: {
+  const handles: FileHandle[] = [];
+  try {
+    const positionFile = await openFile(positionPath, "w+", 0o600);
+    handles.push(positionFile);
+    const objectFile = await openFile(objectPath, "w+", 0o600);
+    handles.push(objectFile);
+    const spool = new SegmentSpool(positionFile, objectFile);
+    const warnings: string[] = [];
+    const warn = (message: string) => {
+      if (!warnings.includes(message)) warnings.push(message);
+    };
+    let bounds: { min: Point; max: Point } = {
       min: [Infinity, Infinity, Infinity],
       max: [-Infinity, -Infinity, -Infinity],
-    },
-    model: [],
-    warnings: [],
-  };
-  const warn = (message: string) => {
-    if (!result.warnings.includes(message)) result.warnings.push(message);
-  };
-  let position: Point = [0, 0, 0],
-    extrusion = 0,
-    absolute = true,
-    absoluteE = true,
-    scale = 1;
-  let pendingLayer = false,
-    markedLayers = false,
-    layerZ = 0,
-    segments: number[] = [],
-    total = 0,
-    sampleStride = 1;
-  let plane = 17,
-    absoluteArc = false,
-    conditionalDepth = 0;
-  const flush = async () => {
-    if (!segments.length) return;
-    if (result.layers.length >= 20000) throw new FileError(413, "Preview exceeds 20,000 layers.");
-    const data = new Float32Array(segments);
-    await writeFile(
-      join(directory, `${result.layers.length + 1}.bin`),
-      new Uint8Array(data.buffer),
-      { mode: 0o600 },
-    );
-    result.layers.push({ z: layerZ, count: segments.length / 6 });
-    segments = [];
-  };
-  const add = (from: Point, to: Point) => {
-    if (from.every((value, index) => value === to[index])) return;
-    if (++total > 8000000 || segments.length >= 900000)
-      throw new FileError(413, "Toolpath is too complex for preview.");
-    const segment = [...from, ...to];
-    segments.push(...segment);
-    for (const point of [from, to])
-      for (let axis = 0; axis < 3; axis++) {
-        result.bounds.min[axis] = Math.min(result.bounds.min[axis]!, point[axis]!);
-        result.bounds.max[axis] = Math.max(result.bounds.max[axis]!, point[axis]!);
+    };
+    let layerCounts: number[] = [],
+      layerZs: number[] = [],
+      layerStart = 0,
+      objects = new Map<number, ObjectShape>(),
+      label: number | undefined;
+    let position: Point = [0, 0, 0],
+      extrusion = 0,
+      absolute = true,
+      absoluteE = true,
+      scale = 1;
+    let pendingLayer = false,
+      markedLayers = false,
+      layerZ = 0;
+    let plane = 17,
+      absoluteArc = false,
+      conditionalDepth = 0;
+    const flush = () => {
+      const count = spool.count - layerStart;
+      if (!count) return;
+      if (layerCounts.length >= 20000) throw new FileError(413, "Preview exceeds 20,000 layers.");
+      layerCounts.push(count);
+      layerZs.push(layerZ);
+      layerStart = spool.count;
+    };
+    const currentObject = () => {
+      if (label === undefined) return undefined;
+      let shape = objects.get(label);
+      if (shape) return shape;
+      if (objects.size >= MAX_OBJECTS) {
+        warn("Only the first 1,024 labelled objects can be selected in the preview.");
+        return undefined;
       }
-    if (total % sampleStride === 0) result.model.push(...segment);
-    if (result.model.length > 360000) {
-      result.model = result.model.filter((_value, index) => Math.floor(index / 6) % 2 === 0);
-      sampleStride *= 2;
-      warn("The 3D overview is simplified; the selected layer retains its full toolpath.");
-    }
-  };
-  try {
+      shape = {
+        id: label,
+        index: objects.size + 1,
+        rows: new Map(),
+        minZ: Infinity,
+        maxZ: -Infinity,
+      };
+      objects.set(label, shape);
+      return shape;
+    };
+    const add = (from: Point, to: Point) => {
+      if (from.every((value, index) => value === to[index])) return;
+      if (spool.count >= 8000000 || spool.count - layerStart >= 150000)
+        throw new FileError(413, "Toolpath is too complex for preview.");
+      const shape = currentObject();
+      spool.push(from, to, shape?.index ?? 0);
+      for (const point of [from, to]) {
+        for (let axis = 0; axis < 3; axis++) {
+          bounds.min[axis] = Math.min(bounds.min[axis]!, point[axis]!);
+          bounds.max[axis] = Math.max(bounds.max[axis]!, point[axis]!);
+          if (point[axis]! < TOOLPATH_ORIGIN || point[axis]! > TOOLPATH_LIMIT)
+            warn("Some paths fall outside the preview volume and are drawn at its edge.");
+        }
+        if (shape) trackObject(shape, point);
+      }
+    };
     for await (const raw of lines(source.stream)) {
       if (
         /^\s*;\s*(?:CHANGE_LAYER|LAYER_CHANGE|LAYER:\s*\d+|layer num\/total_layer_count\s*:)/i.test(
@@ -199,18 +356,23 @@ export async function parseToolpath(
         )
       ) {
         if (!markedLayers) {
-          result.layers = [];
-          result.model = [];
-          result.bounds = {
+          layerCounts = [];
+          layerZs = [];
+          layerStart = 0;
+          objects = new Map();
+          bounds = {
             min: [Infinity, Infinity, Infinity],
             max: [-Infinity, -Infinity, -Infinity],
           };
-          segments = [];
-          total = 0;
-          sampleStride = 1;
+          await spool.reset();
         }
         pendingLayer = true;
         markedLayers = true;
+      }
+      const marker = raw.match(/^\s*;\s*(start|stop) printing object, unique label id:\s*(\d+)/i);
+      if (marker) {
+        label = marker[1]!.toLowerCase() === "start" ? Number(marker[2]) : undefined;
+        continue;
       }
       const command = raw
         .split(";")[0]!
@@ -250,9 +412,9 @@ export async function parseToolpath(
         const nextE =
           fields.E === undefined ? extrusion : fields.E * scale + (absoluteE ? 0 : extrusion);
         if (nextE > extrusion + 0.000001 && conditionalDepth === 0) {
-          if (pendingLayer || (!markedLayers && segments.length && next[2] > layerZ + 0.001))
-            await flush();
-          if (!segments.length) layerZ = next[2];
+          const layerEmpty = spool.count === layerStart;
+          if (pendingLayer || (!markedLayers && !layerEmpty && next[2] > layerZ + 0.001)) flush();
+          if (spool.count === layerStart) layerZ = next[2];
           pendingLayer = false;
           const arc = /^G0?[23]$/.test(code);
           if (!arc) add(position, next);
@@ -294,21 +456,64 @@ export async function parseToolpath(
               previous = point;
             }
           }
+          await spool.drain();
         }
         position = next;
         extrusion = nextE;
       }
     }
-    await flush();
+    flush();
+    await spool.drain(true);
     if (!markedLayers)
       warn(
         "Layer boundaries are estimated from extrusion height because this file has no layer markers.",
       );
-    if (!result.layers.length)
+    if (!layerCounts.length)
       throw new FileError(422, "No printable extrusion paths were found in this file.");
-    return result;
+    const stride = decimationStride(layerCounts, spool.count);
+    if (stride > 1)
+      warn("The toolpath is simplified for preview; some segments in each layer are hidden.");
+    const layerEnds = new Uint32Array(layerCounts.length);
+    let segmentCount = 0;
+    for (const [index, count] of layerCounts.entries())
+      layerEnds[index] = segmentCount += Math.ceil(count / stride);
+    const header: ToolpathHeader = {
+      version: TOOLPATH_VERSION,
+      filename,
+      plate,
+      layerCount: layerCounts.length,
+      segmentCount,
+      layerZ: layerZs,
+      bounds,
+      objects: [...objects.values()].map(objectSummary),
+      simplified: stride > 1,
+      warnings,
+    };
+    const payload = join(directory, "toolpath.bin");
+    const output = await openFile(payload, "w", 0o600);
+    handles.push(output);
+    const prefix = encodeToolpathHeader(header);
+    await output.write(prefix, 0, prefix.byteLength, 0);
+    await output.write(
+      new Uint8Array(layerEnds.buffer),
+      0,
+      layerEnds.byteLength,
+      prefix.byteLength,
+    );
+    const positionsEnd = await copySegments(
+      positionFile,
+      12,
+      layerCounts,
+      stride,
+      output,
+      prefix.byteLength + layerEnds.byteLength,
+    );
+    await copySegments(objectFile, 2, layerCounts, stride, output, positionsEnd);
+    return { directory, payload };
   } finally {
     source.close();
+    await Promise.all(handles.map((handle) => handle.close()));
+    await Promise.all([rm(positionPath, { force: true }), rm(objectPath, { force: true })]);
   }
 }
 async function build(profile: Printer, file: string, plate: number): Promise<Preview> {
@@ -338,7 +543,7 @@ async function build(profile: Printer, file: string, plate: number): Promise<Pre
     } finally {
       client.close();
     }
-    const result = await parseToolpath(path, plate, directory);
+    const result = await parseToolpath(path, plate, directory, file);
     await rm(path, { force: true });
     return result;
   } catch (error) {
@@ -403,26 +608,7 @@ export async function preview(
   try {
     const data = await item.work;
     item.expires = Date.now() + 15 * 60000;
-    const requestedLayer = Number(input.layer || print.layer_num || 1);
-    if (!Number.isInteger(requestedLayer) || requestedLayer < 1)
-      throw new FileError(400, "Invalid layer number.");
-    const layer = Math.min(requestedLayer, data.layers.length);
-    const bytes = await readFile(join(data.directory, `${layer}.bin`));
-    const values = new Float32Array(
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-    );
-    return {
-      kind: "toolpath",
-      filename: file,
-      plate,
-      layer,
-      layerCount: data.layers.length,
-      z: data.layers[layer - 1]!.z,
-      bounds: data.bounds,
-      segments: Array.from(values),
-      model: input.model === "0" ? undefined : data.model,
-      warnings: data.warnings,
-    };
+    return await readFile(data.payload);
   } finally {
     item.users--;
     if (item.invalidated && item.users === 0) removeCached(key, item);
