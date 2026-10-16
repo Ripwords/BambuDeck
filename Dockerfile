@@ -7,6 +7,7 @@ COPY scripts/prepare.ts ./scripts/prepare.ts
 RUN bun install --frozen-lockfile
 COPY index.html vite.config.ts tsconfig*.json tokens.css ./
 COPY src/ ./src/
+COPY shared/ ./shared/
 COPY public/ ./public/
 RUN bun run build
 
@@ -19,6 +20,7 @@ COPY scripts/prepare.ts ./scripts/prepare.ts
 RUN bun install --frozen-lockfile --production && mkdir -p /data/filament-profiles && chown -R bun:bun /data /app
 COPY --from=build --chown=bun:bun /app/dist ./dist
 COPY --chown=bun:bun server/ ./server/
+COPY --chown=bun:bun shared/ ./shared/
 ENV NODE_ENV=production PORT=3000 DATA_DIR=/data BAMBUDECK_FILAMENT_DIR=/data/filament-profiles
 USER bun
 VOLUME ["/data"]

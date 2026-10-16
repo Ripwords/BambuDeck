@@ -11,5 +11,5 @@
     "noEmit": true,
     "esModuleInterop": true
   },
-  "include": ["server/**/*.ts", "scripts/**/*.ts"]
+  "include": ["server/**/*.ts", "scripts/**/*.ts", "shared/**/*.ts"]
 }
