@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.5.2
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.5.1...v0.5.2)
+
+### 🩹 Fixes
+
+- **preview:** Explain when slicers label objects for skipping ([45b19e0](https://github.com/Ripwords/BambuDeck/commit/45b19e0))
+- **preview:** Name the Bambu Studio versions that label objects ([778f7d3](https://github.com/Ripwords/BambuDeck/commit/778f7d3))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.5.1
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.5.0...v0.5.1)
