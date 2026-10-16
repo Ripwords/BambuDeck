@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.5.0
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.4.0...v0.5.0)
+
+### 🚀 Enhancements
+
+- **preview:** Add shared binary toolpath format ([34d76e8](https://github.com/Ripwords/BambuDeck/commit/34d76e8))
+- **preview:** Stream labelled binary toolpaths from the server ([9533824](https://github.com/Ripwords/BambuDeck/commit/9533824))
+- **preview:** Scrub live toolpath layers and skip objects ([cadb0ee](https://github.com/Ripwords/BambuDeck/commit/cadb0ee))
+
+### 💅 Refactors
+
+- **printer:** Validate skipped object IDs with zod ([f158bea](https://github.com/Ripwords/BambuDeck/commit/f158bea))
+
+### 📖 Documentation
+
+- Describe live layers and object skipping ([2574af1](https://github.com/Ripwords/BambuDeck/commit/2574af1))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.4.0
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.3.1...v0.4.0)
