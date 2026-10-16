@@ -1,6 +1,7 @@
 import mqtt, { type MqttClient } from "mqtt";
 import { randomBytes } from "node:crypto";
 import { CameraFeed } from "./camera";
+import { z } from "./validation";
 
 export class PrinterError extends Error {
   constructor(
@@ -19,6 +20,11 @@ export interface PrinterProfile {
   code: string;
 }
 type Fields = Record<string, unknown>;
+const skippedObjectsSchema = z
+  .array(z.number().int().min(0))
+  .min(1)
+  .max(256)
+  .refine((ids) => new Set(ids).size === ids.length);
 type Result = { ok: true; sequence_id: string };
 export interface Capabilities {
   display_name: string;
@@ -526,13 +532,9 @@ export class PrinterClient {
       case "unload":
         return this.send("print", "unload_filament");
       case "skip_objects": {
-        if (
-          !Array.isArray(fields.objects) ||
-          !fields.objects.length ||
-          fields.objects.some((id) => !Number.isInteger(id) || id < 0)
-        )
-          throw new PrinterError(400, "Select valid object IDs.");
-        return this.send("print", "skip_objects", { obj_list: fields.objects });
+        const objects = skippedObjectsSchema.safeParse(fields.objects);
+        if (!objects.success) throw new PrinterError(400, "Select valid object IDs.");
+        return this.send("print", "skip_objects", { obj_list: objects.data });
       }
       case "nozzle":
         return this.send("system", "set_accessories", {
