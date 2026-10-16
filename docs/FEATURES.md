@@ -35,6 +35,6 @@ Current-print previews use embedded 3MF thumbnails when the matching file is ava
 
 Open Explore on the current print, then tap objects in the view or check them in the list. Select Skip and confirm. Skipped objects stop printing for the rest of the job and cannot be restored. They appear greyed out and are counted under the progress bar.
 
-Skipping requires object labels in the sliced file. Turn on Exclude objects or object labelling in your slicer, then slice again. Files without labels show a notice instead of the list.
+Skipping requires object labels in the sliced file. Bambu Studio adds them automatically when a plate has 2 to 64 objects and the print is not a calibration. It never labels a single-object plate, so skipping does not apply there; use Stop instead. In OrcaSlicer, turn on Label objects, then slice again. Files without labels show a notice instead of the list.
 
 Skipping is available while the print is running or paused. Whether the printer accepts the command over LAN depends on its model and firmware. It has not been verified on P1S hardware. The raw object-ID form under Advanced controls has been removed.

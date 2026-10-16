@@ -17,17 +17,20 @@ const emit = defineEmits<{
 }>();
 const { base, connected, status, p, busy, error, run, showNotice } = useDashboard();
 const confirming = ref(false);
-const names = computed(() => {
+const plateObjects = computed(() => {
   const plates: { id?: unknown; index?: unknown; objects?: unknown }[] =
     status.metadata?.plates || [];
   const plate = plates.find((item) => Number(item.id ?? item.index) === props.toolpath.plate);
-  const objects = Array.isArray(plate?.objects) ? plate.objects : [];
-  return new Map<number, string>(
-    objects
-      .filter((item) => item && item.identify_id !== undefined && item.name)
-      .map((item) => [Number(item.identify_id), String(item.name)]),
-  );
+  return Array.isArray(plate?.objects) ? plate.objects : [];
 });
+const names = computed(
+  () =>
+    new Map<number, string>(
+      plateObjects.value
+        .filter((item) => item && item.identify_id !== undefined && item.name)
+        .map((item) => [Number(item.identify_id), String(item.name)]),
+    ),
+);
 const rows = computed(() =>
   props.toolpath.objects.map((object) => ({
     id: object.id,
@@ -69,9 +72,12 @@ watch([base, connected], () => {
         {{ pending.length ? `Skip ${pending.length}` : "Skip" }}
       </button>
     </div>
-    <p v-if="!rows.length" class="help">
-      This file has no object labels. Turn on “Exclude objects” or object labelling in your slicer,
-      then slice again.
+    <p v-if="!rows.length && plateObjects.length === 1" class="help">
+      This plate has one object. Skipping needs two or more, so use Stop instead.
+    </p>
+    <p v-else-if="!rows.length" class="help">
+      This file has no object labels. Bambu Studio adds them when a plate has 2 to 64 objects. In
+      OrcaSlicer, turn on Label objects, then slice again.
     </p>
     <template v-else>
       <p class="help">
