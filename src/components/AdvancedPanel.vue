@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { api } from "../api";
 const props = defineProps<{
   base: string;
@@ -33,6 +33,70 @@ const nozzle = reactive({ diameter: "0.4", nozzle_type: "hardened_steel" }),
     calibrate_remain: true,
   }),
   factor = reactive({ tray_id: 0, k_value: 0.02, n_coef: 1 });
+type Telemetry = Record<string, unknown>;
+function bit(value: unknown, index: number) {
+  if (typeof value === "number" && Number.isInteger(value)) return ((value >> index) & 1) === 1;
+  if (typeof value === "string" && /^[0-9a-f]{1,32}$/i.test(value))
+    return ((BigInt("0x" + value) >> BigInt(index)) & BigInt(1)) === BigInt(1);
+  return undefined;
+}
+function supported(print: Telemetry, homeBit: number, funBit: number) {
+  return bit(print.fun, funBit) ?? bit(print.home_flag, homeBit) ?? true;
+}
+function record(value: unknown): Telemetry | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Telemetry)
+    : undefined;
+}
+function option(name: string, label: string, stateBit: number) {
+  return {
+    label,
+    action: "option",
+    values: (enabled: boolean) => ({ option: name, enabled }),
+    enabled: (print: Telemetry) => bit(print.home_flag, stateBit),
+  };
+}
+const preferenceTable = [
+  { ...option("auto_recovery", "Automatic print recovery", 4), supported: () => true },
+  {
+    ...option("auto_switch_filament", "Automatic filament switching", 10),
+    supported: (print: Telemetry) => {
+      const units = record(print.ams)?.ams;
+      return !Array.isArray(units) || units.length > 0;
+    },
+  },
+  {
+    ...option("filament_tangle_detect", "Filament tangle detection", 20),
+    supported: (print: Telemetry) => supported(print, 19, 9),
+  },
+  {
+    ...option("sound_enable", "Printer sounds", 17),
+    supported: (print: Telemetry) => supported(print, 18, 8),
+  },
+  {
+    label: "Build plate marker detection",
+    action: "marker",
+    values: (enabled: boolean) => ({ enabled }),
+    enabled: (print: Telemetry) => {
+      const value = record(print.xcam)?.buildplate_marker_detector;
+      return typeof value === "boolean" ? value : undefined;
+    },
+    supported: (print: Telemetry) => {
+      const xcam = record(print.xcam);
+      return !xcam || "buildplate_marker_detector" in xcam;
+    },
+  },
+];
+const preferences = computed(() => {
+  const print: Telemetry = props.connected ? props.status.print || {} : {};
+  return preferenceTable
+    .filter((preference) => preference.supported(print))
+    .map((preference) => ({ ...preference, state: preference.enabled(print) }));
+});
+async function setPreference(action: string, values: Record<string, unknown>) {
+  await execute(action, values);
+  await api(props.base + "/advanced", { action: "refresh" }).catch(() => {});
+}
 async function execute(action: string, values: Record<string, unknown> = {}) {
   busy.value = true;
   try {
@@ -70,28 +134,24 @@ function selectProfile(item: any) {
       ><section class="panel settings-panel">
         <div>
           <h2>Printer preferences</h2>
-          <p>
-            Commands apply to the selected printer. Availability depends on its model and firmware.
-          </p>
+          <p>Shows the state your printer reports. Options it doesn't support are hidden.</p>
         </div>
         <fieldset :disabled="!connected || busy" class="preferences">
-          <div
-            v-for="[option, label] in [
-              ['auto_recovery', 'Automatic print recovery'],
-              ['auto_switch_filament', 'Automatic filament switching'],
-              ['filament_tangle_detect', 'Filament tangle detection'],
-              ['sound_enable', 'Printer sounds'],
-            ]"
-            class="preference-row"
-          >
-            <span>{{ label }}</span
-            ><button @click="execute('option', { option, enabled: true })">Enable</button
-            ><button @click="execute('option', { option, enabled: false })">Disable</button>
-          </div>
-          <div class="preference-row">
-            <span>Build plate marker detection</span
-            ><button @click="execute('marker', { enabled: true })">Enable</button
-            ><button @click="execute('marker', { enabled: false })">Disable</button>
+          <div v-for="preference in preferences" :key="preference.label" class="preference-row">
+            <span>{{ preference.label }}</span
+            ><button
+              :class="{ primary: preference.state === true }"
+              :aria-pressed="preference.state === undefined ? undefined : preference.state"
+              @click="setPreference(preference.action, preference.values(true))"
+            >
+              Enable</button
+            ><button
+              :class="{ primary: preference.state === false }"
+              :aria-pressed="preference.state === undefined ? undefined : !preference.state"
+              @click="setPreference(preference.action, preference.values(false))"
+            >
+              Disable
+            </button>
           </div>
         </fieldset>
       </section>
