@@ -66,50 +66,63 @@ function limitBytes(limit: number) {
 }
 async function gcodeStream(
   path: string,
-  plate: number,
-): Promise<{ stream: Readable; close: () => void }> {
+  requested: number | undefined,
+): Promise<{ stream: Readable; close: () => void; plate: number }> {
   if (!/\.3mf$/i.test(path)) {
     const stream = createReadStream(path);
-    return { stream, close: () => stream.destroy() };
+    return { stream, close: () => stream.destroy(), plate: requested ?? 1 };
   }
   const zip = await new Promise<ZipFile>((resolve, reject) => {
-    open(path, { lazyEntries: true, validateEntrySizes: true }, (error, archive) =>
-      error || !archive
-        ? reject(new FileError(400, "The 3MF archive could not be opened."))
-        : resolve(archive),
+    open(
+      path,
+      { lazyEntries: true, autoClose: false, validateEntrySizes: true },
+      (error, archive) =>
+        error || !archive
+          ? reject(new FileError(400, "The 3MF archive could not be opened."))
+          : resolve(archive),
     );
   });
   return new Promise((resolve, reject) => {
     let entries = 0;
+    const plates = new Map<number, Entry>();
     const fail = (error: unknown) => {
       zip.close();
       reject(error);
     };
     zip.on("error", fail);
-    zip.on("end", () =>
-      fail(
-        new FileError(
-          404,
-          `Plate ${plate} has no sliced G-code. Slice the project before previewing layers.`,
-        ),
-      ),
-    );
-    zip.on("entry", (entry: Entry) => {
-      if (++entries > 20000)
-        return fail(new FileError(413, "3MF archive contains too many entries."));
-      if (entry.fileName.toLowerCase() !== `metadata/plate_${plate}.gcode`) return zip.readEntry();
+    zip.on("end", () => {
+      const available = [...plates.keys()].sort((a, b) => a - b);
+      const plate = requested ?? available[0];
+      const entry = plate === undefined ? undefined : plates.get(plate);
+      if (!entry || plate === undefined)
+        return fail(
+          new FileError(
+            404,
+            available.length
+              ? `Plate ${requested} has no sliced G-code. This file contains plate ${available.join(", ")}.`
+              : "This 3MF has no sliced G-code. Slice the project before previewing layers.",
+          ),
+        );
       if (entry.uncompressedSize > MAX_BYTES * 2)
         return fail(new FileError(413, "Sliced G-code exceeds the 1 GiB preview limit."));
       zip.openReadStream(entry, (error, stream) => {
         if (error || !stream) return fail(new FileError(400, "Sliced G-code could not be read."));
         resolve({
           stream,
+          plate,
           close: () => {
             stream.destroy();
             zip.close();
           },
         });
       });
+    });
+    zip.on("entry", (entry: Entry) => {
+      if (++entries > 20000)
+        return fail(new FileError(413, "3MF archive contains too many entries."));
+      const plate = entry.fileName.match(/^Metadata\/plate_(\d+)\.gcode$/i)?.[1];
+      if (plate) plates.set(Number(plate), entry);
+      zip.readEntry();
     });
     zip.readEntry();
   });
@@ -269,13 +282,13 @@ async function copySegments(
 }
 export async function parseToolpath(
   path: string,
-  plate: number,
+  requestedPlate: number | undefined,
   directory: string,
   filename: string,
 ): Promise<Preview> {
   const positionPath = join(directory, "positions.bin"),
     objectPath = join(directory, "objects.bin");
-  const source = await gcodeStream(path, plate);
+  const source = await gcodeStream(path, requestedPlate);
   const handles: FileHandle[] = [];
   try {
     const positionFile = await openFile(positionPath, "w+", 0o600);
@@ -480,7 +493,7 @@ export async function parseToolpath(
     const header: ToolpathHeader = {
       version: TOOLPATH_VERSION,
       filename,
-      plate,
+      plate: source.plate,
       layerCount: layerCounts.length,
       segmentCount,
       layerZ: layerZs,
@@ -516,7 +529,7 @@ export async function parseToolpath(
     await Promise.all([rm(positionPath, { force: true }), rm(objectPath, { force: true })]);
   }
 }
-async function build(profile: Printer, file: string, plate: number): Promise<Preview> {
+async function build(profile: Printer, file: string, plate: number | undefined): Promise<Preview> {
   const directory = await mkdtemp(join(tmpdir(), "bambudeck-preview-"));
   const path = join(directory, /\.3mf$/i.test(file) ? "source.3mf" : "source.gcode");
   try {
@@ -568,14 +581,11 @@ export async function preview(
     );
   if (!/\.(3mf|gcode)$/i.test(file))
     throw new FileError(400, "Layer preview requires sliced 3MF or G-code.");
-  const plate = Number(
-    input.plate ||
-      (!input.file && String(print.gcode_file || "").match(/plate_(\d+)\.gcode/i)?.[1]) ||
-      1,
-  );
-  if (!Number.isInteger(plate) || plate < 1 || plate > 10000)
-    throw new FileError(400, "Invalid plate number.");
-  const key = JSON.stringify([profile.id, file, plate, print.task_id, print.subtask_id]);
+  const reportedPlate = input.file
+    ? undefined
+    : String(print.gcode_file || "").match(/plate_(\d{1,4})\.gcode/i)?.[1];
+  const plate = input.plate ?? (reportedPlate ? Number(reportedPlate) : undefined);
+  const key = JSON.stringify([profile.id, file, plate ?? null, print.task_id, print.subtask_id]);
   let item = cache.get(key);
   if (!item) {
     if (cache.size >= 4) {

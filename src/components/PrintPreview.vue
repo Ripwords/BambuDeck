@@ -84,10 +84,7 @@ async function downloadModel(signal: AbortSignal): Promise<ArrayBuffer> {
 }
 async function downloadToolpath(signal: AbortSignal) {
   const params = new URLSearchParams();
-  if (props.filename) {
-    params.set("file", props.filename);
-    params.set("plate", "1");
-  }
+  if (props.filename) params.set("file", props.filename);
   const response = await fetch(`${props.base}/preview?${params}`, {
     signal,
     credentials: "same-origin",
