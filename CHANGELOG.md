@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.5.3
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.5.2...v0.5.3)
+
+### 🚀 Enhancements
+
+- **files:** Choose which sliced plate to print from a 3MF ([6e6e561](https://github.com/Ripwords/BambuDeck/commit/6e6e561))
+
+### 🩹 Fixes
+
+- **preview:** Reload when the next plate of a project starts ([d38cee2](https://github.com/Ripwords/BambuDeck/commit/d38cee2))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.5.2
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.5.1...v0.5.2)
