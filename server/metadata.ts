@@ -78,6 +78,7 @@ export async function parse3mf(path: string, filename: string): Promise<Metadata
   };
   let entries = 0,
     expanded = 0;
+  const sliced = new Set<number>();
   try {
     await new Promise<void>((resolve, reject) => {
       zip.on("error", reject);
@@ -86,6 +87,8 @@ export async function parse3mf(path: string, filename: string): Promise<Metadata
         void (async () => {
           if (++entries > 20000) throw new FileError(413, "3MF contains too many entries.");
           const name = entry.fileName;
+          const slicedPlate = name.match(/^Metadata\/plate_(\d+)\.gcode$/i)?.[1];
+          if (slicedPlate) sliced.add(Number(slicedPlate));
           if (
             !/^Metadata\/(slice_info\.config|model_settings\.config|project_settings\.config|plate_\d+(?:_small)?\.png)$/i.test(
               name,
@@ -150,6 +153,15 @@ export async function parse3mf(path: string, filename: string): Promise<Metadata
       }
       if (!plate.thumbnail || name.includes("_small")) plate.thumbnail = name;
     }
+    for (const index of sliced) {
+      let plate = result.plates.find((item) => Number(item.index) === index);
+      if (!plate) {
+        plate = { index };
+        result.plates.push(plate);
+      }
+      plate.sliced = true;
+    }
+    result.plates.sort((a, b) => Number(a.index) - Number(b.index));
     return result;
   } catch (error) {
     if (error instanceof FileError) throw error;

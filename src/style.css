@@ -150,7 +150,9 @@ input[type="range"] {
   accent-color: var(--color-accent);
   min-height: 30px;
 }
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
+  flex: none;
   width: 18px;
   min-height: 18px;
   accent-color: var(--color-accent);
@@ -1521,6 +1523,18 @@ pre {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+.metadata-plate.selectable {
+  flex-direction: row;
+  margin: 0 0 4px;
+  font-weight: 400;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.metadata-plate.selectable:has(input:checked) {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
 }
 .metadata-plate img {
   width: 90px;

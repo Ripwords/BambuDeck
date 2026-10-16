@@ -81,7 +81,12 @@ const flags = reactive({
     layer_inspection: false,
     use_ams: true,
   }),
-  bedType = ref("auto");
+  bedType = ref("auto"),
+  printPlate = ref<number>();
+type PlateSummary = { id: number; sliced?: boolean; prediction?: string; weight?: string };
+const printPlates = computed<PlateSummary[]>(() => metadata.value?.metadata?.plates || []);
+const slicedPlates = computed(() => printPlates.value.filter((plate) => plate.sliced));
+const noSlicedPlates = computed(() => !!metadata.value?.metadata && !slicedPlates.value.length);
 async function loadFiles() {
   filesLoading.value = true;
   try {
@@ -132,10 +137,12 @@ async function fileAction() {
 async function preparePrint(path: string) {
   printTarget.value = path;
   metadata.value = null;
+  printPlate.value = undefined;
   modal.value = "print";
   if (/\.3mf$/i.test(path))
     await run(async () => {
       metadata.value = await api(base.value + "/metadata?file=" + encodeURIComponent(path));
+      printPlate.value = slicedPlates.value[0]?.id;
     });
 }
 async function startPrint() {
@@ -144,6 +151,7 @@ async function startPrint() {
     for (const [key, val] of Object.entries({
       existing_path: printTarget.value,
       bed_type: bedType.value,
+      ...(printPlate.value ? { plate: printPlate.value } : {}),
       ...flags,
     }))
       data.set(key, String(val));
@@ -352,7 +360,23 @@ onActivated(() => {
       <p class="print-filename">{{ printTarget.split("/").pop() }}</p>
       <p class="help">Check that the build plate is clear before starting.</p>
       <section v-if="metadata?.metadata" class="print-metadata">
-        <div v-for="plate in metadata.metadata.plates" :key="plate.id" class="metadata-plate">
+        <p v-if="noSlicedPlates" class="error">
+          This 3MF has no sliced plates. Slice it in Bambu Studio and upload it again.
+        </p>
+        <component
+          :is="slicedPlates.length > 1 && plate.sliced ? 'label' : 'div'"
+          v-for="plate in printPlates"
+          :key="plate.id"
+          class="metadata-plate"
+          :class="{ selectable: slicedPlates.length > 1 && plate.sliced }"
+        >
+          <input
+            v-if="slicedPlates.length > 1 && plate.sliced"
+            v-model="printPlate"
+            type="radio"
+            name="print-plate"
+            :value="plate.id"
+          />
           <img
             :src="
               base +
@@ -364,10 +388,11 @@ onActivated(() => {
           />
           <div>
             <strong>Plate {{ plate.id }}</strong>
+            <p v-if="!plate.sliced && slicedPlates.length">Not sliced</p>
             <p v-if="plate.prediction">Estimated time: {{ plate.prediction }} seconds</p>
             <p v-if="plate.weight">Material: {{ plate.weight }} g</p>
           </div>
-        </div>
+        </component>
         <div v-for="material in metadata.metadata.filaments" class="metadata-filament">
           {{ material.type || material.Type || "Filament" }} ·
           {{ material.color || material.Color || "Color not specified" }}
@@ -392,7 +417,7 @@ onActivated(() => {
       <p v-if="error" class="error">{{ error }}</p>
       <div class="modal-actions">
         <button type="button" @click="modal = ''">Cancel</button
-        ><button class="primary" :disabled="busy || !connected">
+        ><button class="primary" :disabled="busy || !connected || noSlicedPlates">
           <Play :size="16" />Start print
         </button>
       </div>

@@ -618,8 +618,10 @@ export class PrinterClient {
       "hot_plate",
       "supertack_plate",
     ]);
+    const plate = String(options.plate || "1");
+    if (!/^[1-9]\d{0,3}$/.test(plate)) throw new PrinterError(400, "Invalid plate.");
     return this.send("print", "project_file", {
-      param: /\.gcode$/i.test(path) ? path : "Metadata/plate_1.gcode",
+      param: /\.gcode$/i.test(path) ? path : `Metadata/plate_${plate}.gcode`,
       subtask_name: path,
       url: `ftp://${path}`,
       bed_type: bed,

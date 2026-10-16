@@ -4,7 +4,7 @@
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Monitoring        | MQTT status, print progress, remaining time, layers, temperatures, fan speeds, connection state, hardware messages, firmware details                                     |
 | Print jobs        | Start uploaded or stored G-code/3MF, confirmed pause and stop, resume, skip objects from the preview, four speed profiles                                                |
-| Print options     | Bed type, timelapse, bed leveling, flow calibration, vibration calibration, layer inspection, AMS                                                                        |
+| Print options     | Plate, bed type, timelapse, bed leveling, flow calibration, vibration calibration, layer inspection, AMS                                                                 |
 | Hardware          | Nozzle/bed/chamber temperature with model limits, cooling fans, light, nozzle configuration, sound, recovery, tangle detection, build-plate marker detection, raw G-code |
 | AMS               | Tray status, humidity, load/unload, external spool, pause/resume/reset, startup/tray reads, remaining estimation, K factor, filament properties                          |
 | Storage           | Browse, search current folder, sort by name/size/modified, upload, download, rename, delete, create folders, recursive ZIP download                                      |
@@ -30,6 +30,10 @@ Filament profile search requires mounting a Bambu Studio profile directory. Prof
 Offline mode caches the app shell. It does not queue printer commands, cache credentials, or simulate live telemetry.
 
 Current-print previews use embedded 3MF thumbnails when the matching file is available in printer storage. The 3D preview displays planned extrusion paths from sliced 3MF or G-code. During a print it follows the reported layer: printed layers are solid, the current layer is highlighted, and the rest of the plate is faint. Dragging the layer slider updates the view immediately; select Live to follow the print again. When the printer doesn't report which plate is printing, the preview uses the sliced plate stored in the file, so a single plate exported from a multi-plate project previews correctly. When the next plate of a project starts, the preview, thumbnails, and object list reload, even though Bambu Studio sends every plate under the same file name. STL previews display the mesh without sliced layers. Slice an unsliced 3MF before using its layer preview. Live toolhead coordinates are not available; the viewer shows planned paths, not the nozzle position.
+
+## Printing a plate from a 3MF
+
+Select Print on a 3MF in Files. When the file has more than one sliced plate, choose the plate to print from the list; the first sliced plate is selected. Plates without sliced G-code show Not sliced and cannot be chosen. A 3MF with no sliced plates cannot be started; slice it in Bambu Studio first.
 
 ## Skipping objects
 
