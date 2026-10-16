@@ -76,8 +76,8 @@ watch([base, connected], () => {
       This plate has one object. Skipping needs two or more, so use Stop instead.
     </p>
     <p v-else-if="!rows.length" class="help">
-      This file has no object labels. Bambu Studio adds them when a plate has 2 to 64 objects. In
-      OrcaSlicer, turn on Label objects, then slice again.
+      This file has no object labels. Bambu Studio 1.09 and later add them when a plate has 2 to 64
+      objects. In OrcaSlicer, turn on Label objects, then slice again.
     </p>
     <template v-else>
       <p class="help">
