@@ -3,7 +3,7 @@
 | Area              | Implemented controls                                                                                                                                                     |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Monitoring        | MQTT status, print progress, remaining time, layers, temperatures, fan speeds, connection state, hardware messages, firmware details                                     |
-| Print jobs        | Start uploaded or stored G-code/3MF, confirmed pause and stop, resume, skip objects, four speed profiles                                                                 |
+| Print jobs        | Start uploaded or stored G-code/3MF, confirmed pause and stop, resume, skip objects from the preview, four speed profiles                                                |
 | Print options     | Bed type, timelapse, bed leveling, flow calibration, vibration calibration, layer inspection, AMS                                                                        |
 | Hardware          | Nozzle/bed/chamber temperature with model limits, cooling fans, light, nozzle configuration, sound, recovery, tangle detection, build-plate marker detection, raw G-code |
 | AMS               | Tray status, humidity, load/unload, external spool, pause/resume/reset, startup/tray reads, remaining estimation, K factor, filament properties                          |
@@ -27,4 +27,12 @@ Filament profile search requires mounting a Bambu Studio profile directory. Prof
 
 Offline mode caches the app shell. It does not queue printer commands, cache credentials, or simulate live telemetry.
 
-Current-print previews use embedded 3MF thumbnails when the matching file is available in printer storage. The 3D preview displays planned extrusion paths from sliced 3MF or G-code, with a layer selector and optional synchronization to the reported current layer. STL previews display the mesh without sliced layers. Slice an unsliced 3MF before using its layer preview. Live toolhead coordinates are not available; the viewer does not represent the head’s exact position.
+Current-print previews use embedded 3MF thumbnails when the matching file is available in printer storage. The 3D preview displays planned extrusion paths from sliced 3MF or G-code. During a print it follows the reported layer: printed layers are solid, the current layer is highlighted, and the rest of the plate is faint. Dragging the layer slider updates the view immediately; select Live to follow the print again. STL previews display the mesh without sliced layers. Slice an unsliced 3MF before using its layer preview. Live toolhead coordinates are not available; the viewer shows planned paths, not the nozzle position.
+
+## Skipping objects
+
+Open Explore on the current print, then tap objects in the view or check them in the list. Select Skip and confirm. Skipped objects stop printing for the rest of the job and cannot be restored. They appear greyed out and are counted under the progress bar.
+
+Skipping requires object labels in the sliced file. Turn on Exclude objects or object labelling in your slicer, then slice again. Files without labels show a notice instead of the list.
+
+Skipping is available while the print is running or paused. Whether the printer accepts the command over LAN depends on its model and firmware. It has not been verified on P1S hardware. The raw object-ID form under Advanced controls has been removed.
