@@ -16,6 +16,8 @@ export interface Session {
   metadata?: Metadata;
   printMetadata?: Metadata;
   printJob?: string;
+  printRun: number;
+  printState?: string;
   printMetadataLoading?: boolean;
   metadataLoading?: { path: string; work: Promise<Metadata> };
   metadataRetry?: number;
@@ -26,6 +28,7 @@ export interface Session {
   unsubscribe: () => void;
   recoveryTimer?: ReturnType<typeof setTimeout>;
 }
+const activeStates = new Set(["PREPARE", "SLICING", "RUNNING", "PAUSE"]);
 const clients = new Map<string, Session>();
 const connecting = new Map<string, Promise<Session>>();
 let lifecycle: Promise<void> = Promise.resolve();
@@ -38,6 +41,7 @@ export function status(session: Session) {
   return {
     ...session.client.status(),
     metadata: session.printMetadata ? publicMetadata(session.printMetadata) : null,
+    print_run: session.printRun,
     upload_status: session.upload,
   };
 }
@@ -112,6 +116,7 @@ export function connect(profile: Printer, reconnect = false): Promise<Session> {
       const session: Session = current || {
         client,
         profile,
+        printRun: 0,
         upload: {},
         listeners: new Set(),
         streams: new Set(),
@@ -144,7 +149,20 @@ export function connect(profile: Printer, reconnect = false): Promise<Session> {
           }, 15000);
         }
         const print = value.print as Record<string, unknown> | undefined;
+        const state = typeof print?.gcode_state === "string" ? print.gcode_state : "";
+        const started =
+          !!state &&
+          activeStates.has(state) &&
+          !!session.printState &&
+          !activeStates.has(session.printState);
+        if (state) session.printState = state;
+        if (started) {
+          session.printRun++;
+          session.metadata = undefined;
+          invalidatePreview(profile.id);
+        }
         const job = JSON.stringify([
+          session.printRun,
           print?.gcode_file,
           print?.subtask_name,
           print?.task_id,

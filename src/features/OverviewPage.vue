@@ -135,7 +135,15 @@ watch([base, connecting], ([, isConnecting], [oldBase]) => {
           :base="base"
           :connected="connected"
           :current-layer="Number(p.layer_num) || 0"
-          :job-key="JSON.stringify([p.task_id, p.subtask_id, p.gcode_file, p.subtask_name])"
+          :job-key="
+            JSON.stringify([
+              status.print_run,
+              p.task_id,
+              p.subtask_id,
+              p.gcode_file,
+              p.subtask_name,
+            ])
+          "
           :skipped="skippedObjects"
         />
         <h3>
