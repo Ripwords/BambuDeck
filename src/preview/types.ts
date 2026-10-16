@@ -1,17 +1,12 @@
-export interface ToolpathPreview {
-  kind: "toolpath";
-  filename: string;
-  plate: number;
-  layerCount: number;
-  layer: number;
-  z: number;
-  bounds: { min: [number, number, number]; max: [number, number, number] };
-  segments: number[];
-  model: number[];
-  warnings: string[];
-}
+import type { Toolpath } from "../../shared/toolpath";
+export type ToolpathPreview = { kind: "toolpath" } & Toolpath;
 export interface MeshPreview {
   kind: "stl";
   buffer: ArrayBuffer;
 }
 export type PreviewGeometry = ToolpathPreview | MeshPreview;
+export interface ObjectState {
+  skipped: ReadonlySet<number>;
+  selected: ReadonlySet<number>;
+  hovered?: number;
+}

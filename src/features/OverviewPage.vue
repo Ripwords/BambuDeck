@@ -47,6 +47,33 @@ watch(
   },
   { immediate: true },
 );
+const skippedObjects = computed<number[]>(() =>
+  Array.isArray(p.value.s_obj) ? p.value.s_obj.map(Number).filter(Number.isInteger) : [],
+);
+const printing = computed(() => ["RUNNING", "PAUSE"].includes(p.value.gcode_state));
+const remainingMinutes = computed(() => {
+  const minutes = Number(p.value.mc_remaining_time);
+  return printing.value && p.value.mc_remaining_time !== "" && Number.isFinite(minutes)
+    ? Math.max(0, Math.round(minutes))
+    : undefined;
+});
+const remaining = computed(() => {
+  const minutes = remainingMinutes.value;
+  if (minutes === undefined) return "";
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours} h ${minutes % 60} min left` : `${minutes} min left`;
+});
+const finish = computed(() => {
+  const minutes = remainingMinutes.value;
+  if (minutes === undefined || p.value.gcode_state !== "RUNNING") return "";
+  const end = new Date(Date.now() + minutes * 60000);
+  const sameDay = end.toDateString() === new Date().toDateString();
+  return `Ends ${end.toLocaleString([], {
+    ...(sameDay ? {} : { weekday: "short" }),
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+});
 function value(input: unknown, suffix = "") {
   return input === undefined || input === null ? "—" : `${input}${suffix}`;
 }
@@ -109,6 +136,7 @@ watch([base, connecting], ([, isConnecting], [oldBase]) => {
           :connected="connected"
           :current-layer="Number(p.layer_num) || 0"
           :job-key="JSON.stringify([p.task_id, p.subtask_id, p.gcode_file, p.subtask_name])"
+          :skipped="skippedObjects"
         />
         <h3>
           {{ p.subtask_name || p.gcode_file || "No active print" }}
@@ -118,7 +146,9 @@ watch([base, connecting], ([, isConnecting], [oldBase]) => {
         </p>
         <div class="progress-label">
           <strong>{{ value(p.mc_percent, "%") }}</strong
-          ><span>{{ value(p.mc_remaining_time, " min left") }}</span>
+          ><span v-if="remaining" class="progress-time"
+            >{{ remaining }}<small v-if="finish">{{ finish }}</small></span
+          >
         </div>
         <progress :value="p.mc_percent || 0" max="100" aria-label="Print progress" />
         <div class="job-meta">
@@ -126,6 +156,8 @@ watch([base, connecting], ([, isConnecting], [oldBase]) => {
             >Layer <b>{{ value(p.layer_num) }} / {{ value(p.total_layer_num) }}</b></span
           ><span
             >Speed <b>{{ value(p.spd_mag, "%") }}</b></span
+          ><span v-if="skippedObjects.length"
+            >Skipped <b>{{ skippedObjects.length }}</b></span
           >
         </div>
         <div class="job-controls">

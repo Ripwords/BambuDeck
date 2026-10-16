@@ -13,7 +13,6 @@ const emit = defineEmits<{
 }>();
 const busy = ref(false),
   gcode = ref(""),
-  objects = ref(""),
   profiles = ref<any[]>([]),
   query = ref("");
 const nozzle = reactive({ diameter: "0.4", nozzle_type: "hardened_steel" }),
@@ -121,27 +120,6 @@ function selectProfile(item: any) {
       </section>
       <details class="panel advanced-details">
         <summary>Advanced controls</summary>
-        <form
-          @submit.prevent="
-            execute('skip_objects', {
-              objects: objects
-                .split(',')
-                .map((v) => Number(v.trim()))
-                .filter(Number.isFinite),
-            })
-          "
-        >
-          <fieldset :disabled="!connected || busy">
-            <h3>Skip print objects</h3>
-            <label
-              >Object IDs, separated by commas<input
-                v-model="objects"
-                required
-                pattern="\d+(\s*,\s*\d+)*"
-                placeholder="1, 3" /></label
-            ><button>Skip objects</button>
-          </fieldset>
-        </form>
         <form @submit.prevent="execute('gcode', { gcode })">
           <fieldset :disabled="!connected || busy">
             <h3>G-code console</h3>

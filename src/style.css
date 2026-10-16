@@ -1844,12 +1844,6 @@ pre {
   border-top: 1px solid var(--color-line);
   padding-top: 16px;
 }
-.preview-layer-controls > label:first-child {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-}
 .preview-layer-controls input[type="range"] {
   width: 100%;
   min-height: 32px;
@@ -1857,4 +1851,115 @@ pre {
 }
 .preview-dialog .help {
   margin: 0;
+}
+.progress-label strong {
+  font-size: 40px;
+  line-height: 1;
+}
+.progress-time {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+}
+.progress-time small {
+  font-size: 11px;
+}
+.preview-canvas.picking {
+  cursor: pointer;
+}
+.preview-dialog-body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.preview-dialog-main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.preview-layer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.preview-layer-row label {
+  display: block;
+  margin: 0;
+}
+.preview-layer-row label span {
+  margin-left: 8px;
+}
+.live-button {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 12px;
+}
+.object-skip {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+.object-skip-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.object-skip-heading h3 {
+  font-size: 15px;
+}
+.object-skip .help {
+  margin: 0;
+}
+.object-skip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+.object-skip-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 12px;
+  border-top: 1px solid var(--color-line);
+}
+.object-skip-list li:first-child {
+  border-top: 0;
+}
+.object-skip-list li.hovered {
+  background: var(--color-subtle);
+}
+.object-skip-list li.skipped {
+  color: var(--color-muted);
+}
+.object-skip-list .checkbox-label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  cursor: pointer;
+}
+.object-skip-list input {
+  flex: none;
+}
+.object-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (min-width: 860px) {
+  .preview-dialog.with-objects .preview-dialog-body {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
 }
