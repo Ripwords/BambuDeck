@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.5.1
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.5.0...v0.5.1)
+
+### 🚀 Enhancements
+
+- **settings:** Show reported printer preference states ([cb16064](https://github.com/Ripwords/BambuDeck/commit/cb16064))
+
+### 🩹 Fixes
+
+- **preview:** Use the sliced plate stored in the file when none is reported ([b87d724](https://github.com/Ripwords/BambuDeck/commit/b87d724))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.5.0
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.4.0...v0.5.0)
