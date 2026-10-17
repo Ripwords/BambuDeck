@@ -25,6 +25,8 @@ Printer preferences highlight the state the printer reports for automatic recove
 
 Hardware messages show reported codes and troubleshooting links. A bundled human-readable error-message catalogue is not included.
 
+A paused print shows why it paused when the printer reports a reason, such as a user pause, an open front cover, or a nozzle clog. When the printer reports a filament runout (pause stage 6 or print error `07xx-8011`), the overview shows an "Out of filament" banner. The banner names the external spool when the printer identifies it. Load new filament, then use Resume. Runout detection has not been verified on physical hardware.
+
 Filament profile search requires mounting a Bambu Studio profile directory. Profile settings can also be entered manually.
 
 Offline mode caches the app shell. It does not queue printer commands, cache credentials, or simulate live telemetry.

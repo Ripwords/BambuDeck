@@ -229,6 +229,40 @@ function stageLabel(value: unknown) {
   const id = Number(value);
   return id === -1 || id === 255 ? "Idle" : stageLabels[id];
 }
+const outOfFilamentStage = 6;
+const pauseReasonStages = new Set([
+  5,
+  outOfFilamentStage,
+  16,
+  17,
+  20,
+  21,
+  23,
+  26,
+  27,
+  28,
+  30,
+  32,
+  33,
+  34,
+  35,
+]);
+function filamentRunout(print: Fields) {
+  const code = Number(print.print_error) >>> 0;
+  const reported = code >>> 24 === 0x07 && (code & 0xffff) === 0x8011;
+  if (!reported && Number(print.stg_cur) !== outOfFilamentStage) return null;
+  const external = ((code >>> 16) & 0xff) === 0xff;
+  return {
+    active: true,
+    code: reported
+      ? [code >>> 16, code & 0xffff]
+          .map((part) => part.toString(16).padStart(4, "0").toUpperCase())
+          .join("-")
+      : "",
+    message: external ? "External spool ran out of filament" : "Filament ran out",
+    description: "Load new filament, then resume the print.",
+  };
+}
 
 export class PrinterClient {
   private transport: MqttClient | null = null;
@@ -361,7 +395,13 @@ export class PrinterClient {
       IDLE: "Idle",
       FAILED: "Failed",
     };
+    const runout = state === "PAUSE" ? filamentRunout(print) : null;
+    const pauseReason = pauseReasonStages.has(Number(print.stg_cur))
+      ? stageLabel(print.stg_cur)
+      : "";
     const stage =
+      (runout && "Out of filament") ||
+      (state === "PAUSE" && pauseReason) ||
       statusNames[state] ||
       (state === "RUNNING" && Number(print.layer_num) > 0
         ? "Printing"
@@ -382,6 +422,7 @@ export class PrinterClient {
       capabilities: caps,
       connected: this.connected,
       stage_message: stage,
+      filament_runout: runout,
       metadata: null,
       upload_status: {},
       metadata_download_status: {},

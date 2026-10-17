@@ -190,6 +190,14 @@ watch([base, connecting], ([, isConnecting], [oldBase]) => {
       </div>
     </section>
   </div>
+  <div v-if="status.filament_runout?.active" class="banner error" role="alert">
+    <AlertCircle :size="20" />
+    <div>
+      <strong>{{ status.filament_runout.message }}</strong>
+      <p>{{ status.filament_runout.description }}</p>
+      <small v-if="status.filament_runout.code">Error {{ status.filament_runout.code }}</small>
+    </div>
+  </div>
   <div v-if="status.hms?.active" class="banner error">
     <AlertCircle :size="20" />
     <div>
