@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.4
+
+[compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.5.3...v0.5.4)
+
+### 🚀 Enhancements
+
+- **overview:** Detect filament runout and show pause reasons ([f43566c](https://github.com/Ripwords/BambuDeck/commit/f43566c))
+
+### ❤️ Contributors
+
+- JJ <teohjjteoh@gmail.com>
+
 ## v0.5.3
 
 [compare changes](https://github.com/Ripwords/BambuDeck/compare/v0.5.2...v0.5.3)
