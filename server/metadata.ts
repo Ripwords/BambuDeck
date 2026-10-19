@@ -121,7 +121,7 @@ export async function parse3mf(path: string, filename: string): Promise<Metadata
               const index = Number(
                 fields.index ??
                   (fields.plater_id !== undefined
-                    ? Number(fields.plater_id) + 1
+                    ? Number(fields.plater_id)
                     : result.plates.length + 1),
               );
               let item = result.plates.find((p) => Number(p.index) === index);
