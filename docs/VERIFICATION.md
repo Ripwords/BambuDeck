@@ -32,3 +32,9 @@ Manual API review with isolated temporary databases covered setup, login/logout,
 ## Preview boundaries
 
 Sliced 3MF and raw G-code previews show planned extrusion geometry. The server sends a compact binary toolpath with every layer, so the browser downloads it once per print and scrubs layers without further requests. Coordinates are quantized from a -100 mm origin in 0.01 mm steps. Paths above 1.5 million segments are simplified with a visible warning. Each labelled object carries a footprint outline used for tap selection. The layer view can follow the reported layer number; it does not infer live toolhead coordinates. Parsing limits include source size, expanded G-code size, layer count, and segment count. Unsupported arcs are omitted with a visible warning. STL model previews are bounded and do not provide sliced layers. Unsliced 3MF must be sliced first.
+
+## Version 0.5 screenshots
+
+The documentation screenshots were captured on 2026-10-18 against an isolated data directory. Bambu Studio's bundled sample models (3DBenchy, cube, disc, torus, teardrop) were sliced with its command-line slicer into a 240-layer, five-object 3MF. BambuDeck's own 3MF, toolpath, and telemetry parsers served that file to the browser, and the printer endpoints were intercepted with sample telemetry: a running print with one skipped object, and an external-spool runout pause. No printer was contacted and no command was sent. The camera endpoint returned unavailable rather than a fabricated feed.
+
+The review covered the overview at 1440 and 390 pixels, the layer explorer, the print dialog, an STL preview from Files, and printer preferences. It also found that single-plate 3MFs listed an extra unsliced plate in the print dialog, because Bambu `plater_id` values were treated as zero-based. They are one-based; plate numbering now matches the `plate_N` thumbnails and G-code.

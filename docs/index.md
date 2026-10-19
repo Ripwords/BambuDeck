@@ -6,9 +6,9 @@ Monitor and control Bambu Lab printers from your browser. Run one Docker contain
 
 ## Screenshots
 
-Desktop and mobile views with sample printer data. No live camera is connected in these previews.
+The screenshots use sample telemetry. The previews show real geometry: Bambu Studio's bundled sample models sliced with its command-line slicer and rendered by BambuDeck's own parser. No camera is connected.
 
-![BambuDeck desktop dashboard with sample print progress](/screenshots/desktop.png)
+![BambuDeck desktop dashboard with a sample print at layer 104 of 240](/screenshots/desktop.png)
 
 <details>
 <summary>Mobile dashboard</summary>
@@ -19,10 +19,13 @@ Desktop and mobile views with sample printer data. No live camera is connected i
 
 ## In the dashboard
 
-- Print progress, temperatures, layers, and camera.
-- Start, pause, resume, and stop jobs.
-- Upload files, inspect 3MF plates, and manage the SD card.
-- Manage AMS filament and printer settings.
+- Print progress, temperatures, layers, AMS trays, and camera.
+- A 3D layer preview of the sliced toolpath that follows the print. Scrub any layer and skip objects mid-print.
+- Start, pause, resume, and stop jobs. Choose which plate of a multi-plate 3MF to print.
+- Filament runout detection, with the reason a print paused.
+- Upload files, preview STL and sliced 3MF, and manage the SD card.
+- Find printers on the LAN, and recover automatically when a printer's address changes.
+- Printer preferences that show the state the printer reports.
 - Connect Home Assistant through MQTT Discovery.
 
 See [feature coverage](./FEATURES.md) for the full list and model-dependent limits.

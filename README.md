@@ -4,11 +4,54 @@ A mobile dashboard for Bambu Lab printers in LAN mode. Monitor prints and camera
 
 [Documentation](https://ripwords.github.io/BambuDeck/) · [Docker Hub](https://hub.docker.com/r/ripwords/bambudeck)
 
+## Features
+
+- Live print progress, temperatures, fans, AMS trays, and camera snapshots.
+- 3D layer preview of the sliced toolpath that follows the reported layer. Scrub any layer instantly.
+- Skip individual objects mid-print from the preview.
+- Choose which sliced plate of a multi-plate 3MF to print. The preview reloads when the next plate starts.
+- Filament runout detection with pause reasons and error codes.
+- Printer preferences (auto recovery, filament switching, tangle and plate-marker detection, sounds) highlight the state the printer reports.
+- LAN printer discovery, and automatic recovery when a printer's IP address changes.
+- File browser for printer storage with search, sorting, upload, ZIP download, and STL/3MF previews.
+- Home Assistant entities through MQTT Discovery.
+- Password sign-in with Better Auth; printer credentials encrypted in SQLite.
+
+See [feature coverage](docs/FEATURES.md) for model-dependent limits.
+
 ## Screenshots
 
-Desktop and mobile views with sample printer data. No live camera is connected in these previews.
+The screenshots use sample telemetry. The previews show real geometry: Bambu Studio's bundled sample models (3DBenchy, cube, disc, torus, teardrop) sliced with its command-line slicer and rendered by BambuDeck's own parser. No camera is connected.
 
-![BambuDeck desktop dashboard with sample print progress](docs/public/screenshots/desktop.png)
+![BambuDeck desktop dashboard with a sample print at layer 104 of 240](docs/public/screenshots/desktop.png)
+
+<details>
+<summary>Layer explorer and object skipping</summary>
+
+![Layer explorer showing printed layers, the current layer, and a skipped torus](docs/public/screenshots/explore.png)
+
+</details>
+
+<details>
+<summary>Filament runout</summary>
+
+![Paused print with an external spool runout banner and error code](docs/public/screenshots/runout.png)
+
+</details>
+
+<details>
+<summary>STL preview from the file browser</summary>
+
+<img src="docs/public/screenshots/stl-preview.png" alt="3DBenchy STL mesh preview" width="480" />
+
+</details>
+
+<details>
+<summary>Printer preferences</summary>
+
+![Printer preferences with reported states highlighted](docs/public/screenshots/preferences.png)
+
+</details>
 
 <details>
 <summary>Mobile dashboard</summary>

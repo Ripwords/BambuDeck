@@ -11,6 +11,7 @@
 | 3MF               | Plate metadata, objects, filament requirements, thumbnails, bounded archive extraction, planned toolpath and layer preview                                               |
 | Filament profiles | Search mounted JSON profiles with inheritance resolution                                                                                                                 |
 | Camera            | Shared JPEG tunnel or FFmpeg RTSP conversion, snapshot download, enlarged view, browser visibility pause and reconnection                                                |
+| Discovery         | Find printers on the LAN from the printer editor, recover a saved printer whose address changed. See [printer discovery](./configuration.md#printer-discovery)           |
 | Home Assistant    | MQTT discovery, telemetry, print buttons, light, speed, temperature controls                                                                                             |
 | Dashboard         | Multiple saved printers, encrypted SQLite credentials, password login, system/light/dark theme, expiring command confirmations, mobile layout, installable app shell     |
 | Deployment        | Multi-stage Docker image, Compose, persistent volume, nonroot runtime, healthcheck, optional HTTPS                                                                       |
@@ -23,15 +24,25 @@ The camera uses JPEG frames for browser compatibility. The printer determines av
 
 Printer preferences highlight the state the printer reports for automatic recovery, filament switching, tangle detection, sounds, and build plate marker detection. Options the printer reports as unsupported are hidden. After a change, BambuDeck requests a status refresh so the highlight follows the printer.
 
+![Printer preferences with the reported states highlighted](/screenshots/preferences.png)
+
 Hardware messages show reported codes and troubleshooting links. A bundled human-readable error-message catalogue is not included.
 
 A paused print shows why it paused when the printer reports a reason, such as a user pause, an open front cover, or a nozzle clog. When the printer reports a filament runout (pause stage 6 or print error `07xx-8011`), the overview shows an "Out of filament" banner. The banner names the external spool when the printer identifies it. Load new filament, then use Resume. Runout detection has not been verified on physical hardware.
+
+![Paused sample print with an external spool runout banner and error 07FF-8011](/screenshots/runout.png)
 
 Filament profile search requires mounting a Bambu Studio profile directory. Profile settings can also be entered manually.
 
 Offline mode caches the app shell. It does not queue printer commands, cache credentials, or simulate live telemetry.
 
 Current-print previews use embedded 3MF thumbnails when the matching file is available in printer storage. The 3D preview displays planned extrusion paths from sliced 3MF or G-code. During a print it follows the reported layer: printed layers are solid, the current layer is highlighted, and the rest of the plate is faint. Dragging the layer slider updates the view immediately; select Live to follow the print again. When the printer doesn't report which plate is printing, the preview uses the sliced plate stored in the file, so a single plate exported from a multi-plate project previews correctly. When the next plate of a project starts, the preview, thumbnails, and object list reload, even though Bambu Studio sends every plate under the same file name. STL previews display the mesh without sliced layers. Slice an unsliced 3MF before using its layer preview. Live toolhead coordinates are not available; the viewer shows planned paths, not the nozzle position.
+
+![Layer explorer at layer 104 of 240 with a skipped torus](/screenshots/explore.png)
+
+![3DBenchy STL mesh preview opened from Files](/screenshots/stl-preview.png)
+
+The screenshots use sample telemetry and Bambu Studio's bundled sample models sliced with its command-line slicer.
 
 ## Printing a plate from a 3MF
 
